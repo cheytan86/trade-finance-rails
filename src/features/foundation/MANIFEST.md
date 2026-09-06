@@ -57,6 +57,18 @@ push (no remote exists).
   accounts, 4 invoices (submitted×2/approved/refused); funded/disbursed
   deliberately deferred to A2 via the ledger module (A1)
 
+- `src/lib/money/index.ts` + `money.test.ts` — bigint minor units, the float
+  refusal, divRound half-away-from-zero (the one place rounding is defined),
+  act/360 interest, display formatting (A2)
+- `src/lib/pricing/index.ts` + `pricing.test.ts` — the sibling module
+  corrected: bigint, tested to the cent against the design's worked example;
+  snapshot (de)serialization that refuses corrupted fields (A2)
+- `src/lib/ledger/index.ts` + `ledger.test.ts` — THE SOLE WRITER: validate
+  (≥2 entries, no zeros, bigint, Σ=0) before any db call; atomic batch
+  booking; 23505 → "ledger-already-recorded"; balanceOf/balances as SUM (A2)
+- `src/lib/domain/states.ts` + `states.test.ts` — the 5-state machine, full
+  25-pair matrix pinned (4 legal), refusals name their rule (A2)
+
 ## Files modified
 
 - `STACK_RULES.md` — gate section rewritten with real numbers; framework
@@ -76,5 +88,14 @@ push (no remote exists).
 - 2026-09-06 · A1: schema approved by Chetan before writing; migration
   0000 generated and applied to Neon; seed run and verified by count query
   (7/5/4/0/0). Four gates green (stale tsconfig.tsbuildinfo cleared after
-  the ES2022 bump — cache, not code). Last verified prompt: **A1**.
-  Next: A2 (money + ledger core + state model).
+  the ES2022 bump — cache, not code).
+- 2026-09-06 · A2: money/pricing/ledger/states built with 31 tests (the
+  placeholder retired). One real bug caught by its test: terminal-state
+  refusal messages ranked below transition-specific ones — fixed. Seed
+  extended: funded + disbursed backdrop booked THROUGH lib/ledger; verified
+  in Neon by SQL (3 events all Σ=0; balances derive and reconcile to zero
+  across the chart). Domain modules use relative .ts-extension imports so
+  node-run scripts resolve them; Turbopack build confirmed fine with it.
+  Files also touched: scripts/seed.mts (backdrop), src/db/client.ts
+  (./schema→./schema.ts), tests/gate.test.ts deleted. Last verified prompt:
+  **A2**. Next: A3 (screens).

@@ -61,13 +61,21 @@ const [meridian, halvorsen, coralline] = await db
   .returning();
 
 // The chart of accounts. No balance column exists to fill — that is the point.
-await db.insert(accounts).values([
-  { kind: "funder_cash", partyId: northgate.id, currency: "USD" },
-  { kind: "platform_treasury", partyId: null, currency: "USD" },
-  { kind: "supplier_payable", partyId: amber.id, currency: "USD" },
-  { kind: "supplier_payable", partyId: ostrava.id, currency: "USD" },
-  { kind: "fee_income", partyId: null, currency: "USD" },
-]);
+const chart = await db
+  .insert(accounts)
+  .values([
+    { kind: "funder_cash", partyId: northgate.id, currency: "USD" },
+    { kind: "platform_treasury", partyId: null, currency: "USD" },
+    { kind: "supplier_payable", partyId: amber.id, currency: "USD" },
+    { kind: "supplier_payable", partyId: ostrava.id, currency: "USD" },
+    { kind: "fee_income", partyId: null, currency: "USD" },
+  ])
+  .returning();
+const acct = (kind: string, partyId: string | null = null) => {
+  const a = chart.find((c) => c.kind === kind && c.partyId === partyId);
+  if (!a) throw new Error(`seed: missing account ${kind}`);
+  return a.id;
+};
 
 // Backdrop invoices. Amounts are bigint minor units (cents).
 await db.insert(invoices).values([
@@ -108,11 +116,116 @@ await db.insert(invoices).values([
   },
 ]);
 
+// ── funded + disbursed backdrop — booked THROUGH the ledger module, the sole
+// writer, so the seed can never place an unbalanced movement. Snapshots come
+// from the pricing module so every amount is internally consistent.
+
+const { computePricing, snapshotToJson } = await import("../src/lib/pricing/index.ts");
+const { bookMovement } = await import("../src/lib/ledger/index.ts");
+const { getDb } = await import("../src/db/client.ts");
+const ldb = getDb();
+
+// Funded: Ostrava → Halvorsen, 20,000.00, snapshot locked at seed time.
+{
+  const terms = {
+    faceValueMinor: 20_000_00n,
+    dueDate: isoDaysFromNow(45),
+    advanceRateBps: 8500,
+    supplierRateBps: 950,
+    funderRateBps: 800,
+    txnCostType: "fixed" as const,
+    txnCostValue: 150_00n,
+  };
+  const snap = computePricing(terms, new Date());
+  const [inv] = await db
+    .insert(invoices)
+    .values({
+      supplierId: ostrava.id,
+      debtorId: halvorsen.id,
+      faceValueMinor: terms.faceValueMinor,
+      dueDate: terms.dueDate,
+      status: "funded",
+      advanceRateBps: terms.advanceRateBps,
+      supplierRateBps: terms.supplierRateBps,
+      funderRateBps: terms.funderRateBps,
+      txnCostType: terms.txnCostType,
+      txnCostValue: terms.txnCostValue,
+      pricingSnapshot: snapshotToJson(snap),
+    })
+    .returning();
+  await bookMovement(ldb, {
+    invoiceId: inv.id,
+    type: "funding",
+    evidenceRef: `demo:seed:funding:${inv.id.slice(0, 8)}`,
+    idempotencyKey: `funding:${inv.id}`,
+    entries: [
+      { accountId: acct("funder_cash", northgate.id), amountMinor: -snap.principalMinor },
+      { accountId: acct("platform_treasury"), amountMinor: snap.principalMinor },
+    ],
+  });
+}
+
+// Disbursed: Amber → Meridian, 32,500.00, financed 50 days ago.
+{
+  const terms = {
+    faceValueMinor: 32_500_00n,
+    dueDate: isoDaysFromNow(10),
+    advanceRateBps: 8500,
+    supplierRateBps: 950,
+    funderRateBps: 800,
+    txnCostType: "fixed" as const,
+    txnCostValue: 150_00n,
+  };
+  const snap = computePricing(terms, new Date(Date.now() - 50 * 86_400_000));
+  const [inv] = await db
+    .insert(invoices)
+    .values({
+      supplierId: amber.id,
+      debtorId: meridian.id,
+      faceValueMinor: terms.faceValueMinor,
+      dueDate: terms.dueDate,
+      status: "disbursed",
+      advanceRateBps: terms.advanceRateBps,
+      supplierRateBps: terms.supplierRateBps,
+      funderRateBps: terms.funderRateBps,
+      txnCostType: terms.txnCostType,
+      txnCostValue: terms.txnCostValue,
+      pricingSnapshot: snapshotToJson(snap),
+    })
+    .returning();
+  await bookMovement(ldb, {
+    invoiceId: inv.id,
+    type: "funding",
+    evidenceRef: `demo:seed:funding:${inv.id.slice(0, 8)}`,
+    idempotencyKey: `funding:${inv.id}`,
+    entries: [
+      { accountId: acct("funder_cash", northgate.id), amountMinor: -snap.principalMinor },
+      { accountId: acct("platform_treasury"), amountMinor: snap.principalMinor },
+    ],
+  });
+  // The deliberate three-entry movement: fee lines visible, never margin.
+  await bookMovement(ldb, {
+    invoiceId: inv.id,
+    type: "disbursement",
+    evidenceRef: `demo:seed:disbursement:${inv.id.slice(0, 8)}`,
+    idempotencyKey: `disbursement:${inv.id}`,
+    entries: [
+      { accountId: acct("platform_treasury"), amountMinor: -snap.principalMinor },
+      { accountId: acct("supplier_payable", amber.id), amountMinor: snap.supplierDisbursementMinor },
+      {
+        accountId: acct("fee_income"),
+        amountMinor: snap.principalMinor - snap.supplierDisbursementMinor,
+      },
+    ],
+  });
+}
+
 console.log("Seeded:", {
   platform: platform.name,
   suppliers: [amber.name, ostrava.name],
   funder: northgate.name,
   debtors: [meridian.name, halvorsen.name, coralline.name],
   accounts: 5,
-  invoices: "2 submitted · 1 approved · 1 refused (funded/disbursed arrive in A2 via the ledger module)",
+  invoices: "2 submitted · 1 approved · 1 refused · 1 funded · 1 disbursed",
+  movements: "3 events, 7 entries, every event summing to zero — via lib/ledger",
 });
