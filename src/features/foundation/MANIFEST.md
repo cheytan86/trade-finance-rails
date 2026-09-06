@@ -39,13 +39,25 @@ push (no remote exists).
 
 - `src/features/foundation/MANIFEST.md` — this file (rails)
 - `AGENTS.md` (repo root, branch-only) — foundation rules block (rails)
+- `package.json`, `package-lock.json` — pinned exact versions (A0)
+- `next.config.ts`, `tsconfig.json`, `postcss.config.mjs`,
+  `eslint.config.mjs` — canonical create-next-app@16.3.4 output (A0)
+- `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/globals.css`,
+  `src/app/favicon.ico` — minimal boot shell, placeholder page (A0)
+- `vitest.config.mts` — one runner, reason documented inline (A0)
+- `tests/gate.test.ts` — placeholder; retired at A2 (A0)
+- `next-env.d.ts` — generated (A0)
 
 ## Files modified
 
-- none
+- `STACK_RULES.md` — gate section rewritten with real numbers; framework
+  versions pinned; Next 16 quirks re-verified against installed local docs (A0)
 
 ## Progress notes
 
 - 2026-09-06 · rails: first commit `9c6bcb4` on `main` (22 docs/process
-  files); branch `feat/foundation` cut; no flag by design; manifest + rules
-  block created. Last verified prompt: **00 (rails)**. Next: A1.
+  files); branch `feat/foundation` cut; no flag by design.
+- 2026-09-06 · A0: scaffold + gate. All four gate commands green (tsc 0 ·
+  lint 0 · test 1/1 · build ✓, `/` serves via next start). @types/node
+  bumped 20→24.13.3 for vitest 5 peer range. Last verified prompt: **A0**.
+  Next: A1 (data layer — needs DATABASE_URL in .env.local).
