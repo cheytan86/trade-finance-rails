@@ -4,10 +4,13 @@ import { Table, Th, Td } from "@/components/ui/table";
 import { ProvenanceBadge } from "@/components/ui/provenance-badge";
 import { Amount } from "@/components/ui/amount";
 import { chartWithBalances, allMovements } from "@/lib/queries";
+import { seatGate } from "@/lib/roles/gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function LedgerPage() {
+  const gate = await seatGate("ops");
+  if (gate) return gate;
   const chart = await chartWithBalances();
   const movements = await allMovements();
 

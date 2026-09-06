@@ -11,17 +11,13 @@ import { balances } from "@/lib/ledger";
 const supplierParty = alias(parties, "supplier_party");
 const debtorParty = alias(parties, "debtor_party");
 
-/** A3 stand-in for identity: the demo acts as the first supplier until the
- *  getIdentity() seam lands in A4. Deterministic: alphabetical. */
-export async function demoSupplier() {
+export async function allSuppliers() {
   const db = getDb();
-  const [p] = await db
+  return db
     .select()
     .from(parties)
     .where(eq(parties.role, "supplier"))
-    .orderBy(asc(parties.name))
-    .limit(1);
-  return p;
+    .orderBy(asc(parties.name));
 }
 
 export async function demoFunder() {

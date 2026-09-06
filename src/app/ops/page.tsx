@@ -4,10 +4,13 @@ import { Table, Th, Td } from "@/components/ui/table";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Amount } from "@/components/ui/amount";
 import { allInvoices } from "@/lib/queries";
+import { seatGate } from "@/lib/roles/gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function OpsQueue() {
+  const gate = await seatGate("ops");
+  if (gate) return gate;
   const rows = await allInvoices();
   const awaiting = rows.filter((r) => r.invoice.status === "submitted");
   const rest = rows.filter((r) => r.invoice.status !== "submitted");

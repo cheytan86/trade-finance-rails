@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Sans, IBM_Plex_Mono } from "next/font/google";
 import { RoleSwitch } from "@/components/role-switch";
+import { getIdentity } from "@/lib/roles/identity";
 import "./globals.css";
 
 const instrument = Instrument_Sans({
@@ -20,7 +21,8 @@ export const metadata: Metadata = {
     "Receivables financing where the settlement rail is a priced decision. Demonstration only — testnets and synthetic data.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const identity = await getIdentity();
   return (
     <html lang="en" className={`${instrument.variable} ${plexMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-paper font-sans text-ink">
@@ -29,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             trade<span className="text-cobalt">·</span>finance
             <span className="text-cobalt">·</span>rails
           </span>
-          <RoleSwitch />
+          <RoleSwitch current={identity?.seat ?? null} />
         </header>
         <div className="border-b border-line bg-surface px-4 py-1.5 text-center text-xs text-muted">
           Demonstration — testnets and synthetic data only. Nothing here moves real money.

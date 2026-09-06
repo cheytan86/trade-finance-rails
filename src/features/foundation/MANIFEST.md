@@ -84,6 +84,19 @@ push (no remote exists).
   — landing + the six designed surfaces, all force-dynamic, reading live
   Neon; gates rendered disabled until A5; pay stub public and labelled (A3)
 
+- `src/lib/roles/parse.ts` + `parse.test.ts` — pure identity parsing: the
+  cookie is a claim; garbage collapses to null, never a privileged default (A4)
+- `src/lib/roles/identity.ts` — getIdentity(), THE seam; sole cookie reader (A4)
+- `src/lib/roles/actions.ts` — switchSeat / actAsSupplier server actions;
+  party claims validated against the db before storage (A4)
+- `src/lib/roles/gate.tsx` — seatGate() for PAGES, deliberately not a layout:
+  a layout withholding {children} still ships the page's data in the RSC
+  payload (found by curl mid-A4, fixed, re-proven clean) (A4)
+- `src/components/role-gate.tsx` — the wrong-seat card: names the surface,
+  offers the switch, never the data (A4)
+
+## Files modified
+
 - `STACK_RULES.md` — gate section rewritten with real numbers; framework
   versions pinned; Next 16 quirks re-verified against installed local docs (A0)
 - `package.json` / `package-lock.json` — +drizzle-orm 0.45.2,
@@ -117,4 +130,11 @@ push (no remote exists).
   against the production server (amounts, statuses, evidence badges all
   present; smoke leg 1 "boots with role switch" now walkable). Layout.tsx
   also modified (shell + banner + fonts). Gates green (tsc · lint · 31/31 ·
-  build). Last verified prompt: **A3**. Next: A4 (getIdentity() + role gate).
+  build). Last verified prompt: **A3**.
+- 2026-09-06 · A4: identity seam + role gate + acting-as picker (Amber ↔
+  Ostrava). role-switch.tsx rewired to server actions (decisions, not
+  navigation); supplier/funder/ops pages gated via seatGate; layouts
+  approach REJECTED after curl proved an RSC-payload data leak — pages gate
+  instead, wrong-seat responses re-proven to carry zero data. 35 tests.
+  Gates green. Last verified prompt: **A4**. Next: A5 (human gates — the
+  spine goes live; boundary trigger fires when it does).

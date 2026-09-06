@@ -3,20 +3,50 @@ import { Button } from "@/components/ui/button";
 import { Table, Th, Td } from "@/components/ui/table";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Amount } from "@/components/ui/amount";
-import { demoSupplier, invoicesForSupplier } from "@/lib/queries";
+import { allSuppliers, invoicesForSupplier } from "@/lib/queries";
+import { getIdentity } from "@/lib/roles/identity";
+import { seatGate } from "@/lib/roles/gate";
+import { actAsSupplier } from "@/lib/roles/actions";
+import { cn } from "@/lib/cn";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function SupplierPage() {
-  const supplier = await demoSupplier();
+  const gate = await seatGate("supplier");
+  if (gate) return gate;
+  const [identity, suppliers] = await Promise.all([getIdentity(), allSuppliers()]);
+  const supplier = suppliers.find((s) => s.id === identity?.partyId) ?? suppliers[0];
   const rows = await invoicesForSupplier(supplier.id);
   return (
     <div className="flex flex-col gap-5">
-      <p className="text-[13px] text-muted">
-        Acting as <span className="font-semibold text-ink">{supplier.name}</span> — the demo
-        supplier seat.
-      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="text-[13px] text-muted">
+          Acting as <span className="font-semibold text-ink">{supplier.name}</span>
+        </p>
+        <div className="flex rounded-lg border border-line bg-surface p-[2px]">
+          {suppliers.map((s) => (
+            <form key={s.id} action={actAsSupplier}>
+              <input type="hidden" name="partyId" value={s.id} />
+              <button
+                type="submit"
+                className={cn(
+                  "rounded-md px-2.5 py-0.5 text-[12px] transition-colors",
+                  s.id === supplier.id
+                    ? "bg-card font-semibold text-ink shadow-card"
+                    : "text-muted hover:text-ink",
+                )}
+              >
+                {s.name.split(" ")[0]}
+              </button>
+            </form>
+          ))}
+        </div>
+        <span className="text-[11.5px] text-muted">
+          — switch and the book below changes with you; the other supplier&apos;s deals never
+          render here.
+        </span>
+      </div>
 
       <Card
         title="New invoice"

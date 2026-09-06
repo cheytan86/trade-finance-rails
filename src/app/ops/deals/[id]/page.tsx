@@ -8,6 +8,7 @@ import { Amount } from "@/components/ui/amount";
 import { DealTimeline } from "@/components/deal-timeline";
 import { invoiceDetail, movementsForInvoice } from "@/lib/queries";
 import { parseSnapshot } from "@/lib/pricing";
+import { seatGate } from "@/lib/roles/gate";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ function fmtBps(bps: number | null): string {
 }
 
 export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">) {
+  const gate = await seatGate("ops");
+  if (gate) return gate;
   const { id } = await params; // Next 16: params is a Promise
   const row = await invoiceDetail(id).catch(() => undefined);
   if (!row) notFound();

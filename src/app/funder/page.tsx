@@ -5,10 +5,13 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Amount } from "@/components/ui/amount";
 import { demoFunder, funderPositions } from "@/lib/queries";
 import { parseSnapshot } from "@/lib/pricing";
+import { seatGate } from "@/lib/roles/gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function FunderPage() {
+  const gate = await seatGate("funder");
+  if (gate) return gate;
   const funder = await demoFunder();
   const { deals, cashBalance } = await funderPositions(funder.id);
 
