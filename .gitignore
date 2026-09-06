@@ -1,0 +1,41 @@
+# The process kits — the method layer.
+#
+# Ignored by default, deliberately and reversibly. They are portable copies of
+# the five-phase process, not this project's code, and publishing the method is
+# a separate decision from publishing the product. Delete these five lines to
+# make it, and it becomes part of what the repository argues.
+#
+# `docs/product/` stays tracked either way — the OUTPUT of the process is the
+# evidence, and that is the half a reader actually needs.
+/discovery-kit/
+/design-kit/
+/develop-kit/
+/deploy-kit/
+/release-kit/
+
+# Secrets. This repository is public from its first commit; nothing here is a
+# key, and the deployed demo is intended to need none.
+.env
+.env.*
+!.env.example
+
+# Toolchain output — the stack is not chosen yet (cycle 0 decides it), so this
+# covers the likely candidates rather than pretending to know.
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Foundry, from cycle 5 onward
+/cache/
+/broadcast/
+/lib/forge-std/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp

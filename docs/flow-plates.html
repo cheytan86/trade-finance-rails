@@ -1,0 +1,482 @@
+<title>The Deal, End to End</title>
+<style>
+  :root{
+    --paper:#f7f8f6; --ink:#16241f; --ink-2:#4a564f; --ink-3:#8a938c;
+    --line:#d6dbd4; --card:#ffffff;
+    --petrol:#175d54; --petrol-soft:#e3edea;
+    --brass:#a97f2f; --brass-soft:#f2ead9;
+    --refuse:#b23a2e; --refuse-soft:#f6e5e2;
+    --fiat:#52646f; --fiat-soft:#e7ebee;
+    --token:#1e7a68; --token-soft:#e0efeb;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#111715; --ink:#e8ebe6; --ink-2:#a9b3ab; --ink-3:#6f7a72;
+      --line:#2c3530; --card:#181f1c;
+      --petrol:#3ba18e; --petrol-soft:#1b2b27;
+      --brass:#c99a4a; --brass-soft:#2a2417;
+      --refuse:#d0604f; --refuse-soft:#2e1c19;
+      --fiat:#8ba0ad; --fiat-soft:#1e262b;
+      --token:#43a08c; --token-soft:#15251f;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#111715; --ink:#e8ebe6; --ink-2:#a9b3ab; --ink-3:#6f7a72;
+    --line:#2c3530; --card:#181f1c;
+    --petrol:#3ba18e; --petrol-soft:#1b2b27;
+    --brass:#c99a4a; --brass-soft:#2a2417;
+    --refuse:#d0604f; --refuse-soft:#2e1c19;
+    --fiat:#8ba0ad; --fiat-soft:#1e262b;
+    --token:#43a08c; --token-soft:#15251f;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font:16px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  .sheet{max-width:1120px;margin:0 auto;padding:40px 28px 80px}
+  .titleblock{
+    border:2px solid var(--ink); padding:22px 26px;
+    display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:flex-end;
+  }
+  h1{
+    font-family:Charter,Georgia,"Times New Roman",serif;
+    font-size:clamp(28px,4vw,40px);line-height:1.08;margin:0;text-wrap:balance;font-weight:700;
+  }
+  .titleblock .sub{color:var(--ink-2);margin-top:8px;max-width:56ch}
+  .meta{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px;color:var(--ink-2);text-align:right;line-height:1.8;white-space:nowrap}
+  .meta b{color:var(--ink)}
+  .plate{margin-top:44px;border:1px solid var(--line);background:var(--card)}
+  .plate-head{
+    display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;
+    padding:16px 22px;border-bottom:1px solid var(--line);
+  }
+  .plate-no{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11px;letter-spacing:.14em;color:var(--paper);
+    background:var(--ink);padding:4px 9px;
+  }
+  .plate-head h2{
+    font-family:Charter,Georgia,serif;font-size:21px;margin:0;font-weight:700;
+  }
+  .plate-head p{margin:0;color:var(--ink-2);font-size:14px;flex-basis:100%;max-width:78ch}
+  .plate-body{padding:18px 12px 22px;overflow-x:auto}
+  svg{display:block;width:100%;height:auto;min-width:760px}
+  svg text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  /* Default ink ONLY for unattributed text: a bare `svg text{fill:…}` rule
+     outranks every fill="" presentation attribute and silently repaints the
+     whole drawing in one colour — the bug this selector exists to prevent. */
+  svg text:not([fill]){fill:var(--ink)}
+  .legend{
+    display:flex;gap:22px;flex-wrap:wrap;align-items:center;
+    padding:14px 22px;border-top:1px solid var(--line);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--ink-2)
+  }
+  .chip{display:inline-block;width:22px;height:10px;border-radius:2px;vertical-align:middle;margin-right:7px}
+  .foot{margin-top:40px;color:var(--ink-3);font-size:13px;max-width:70ch}
+  .foot code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+</style>
+
+<div class="sheet">
+  <header class="titleblock">
+    <div>
+      <h1>The Deal, End to End</h1>
+      <div class="sub">Process plates for the multi-rail receivables programme — one invoice
+      from onboarding to settled, every gate that can say no, and every leg the money takes.</div>
+    </div>
+    <div class="meta">
+      DOC&nbsp;&nbsp;<b>trade-finance-rails</b><br>
+      REF&nbsp;&nbsp;<b>PRODUCT_PAPER v8 · PRD v0.3</b><br>
+      DATE&nbsp;<b>2026-09-06</b>&nbsp;&nbsp;SHEET&nbsp;<b>1 / 1</b>
+    </div>
+  </header>
+
+  <!-- ══════════════════════ PLATE 1 ══════════════════════ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-no">PLATE 1</span>
+      <h2>Lifecycle — every gate proves itself by refusal</h2>
+      <p>Setup happens once per party and signs the RPA; each invoice then descends the deal
+      column. The left spine is the ledger; the right rail is what a stage says when it says no.</p>
+    </div>
+    <div class="plate-body">
+    <svg viewBox="0 0 1060 1620" role="img" aria-label="End-to-end lifecycle flow with refusal paths">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2)"/>
+        </marker>
+        <marker id="arR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--refuse)"/>
+        </marker>
+      </defs>
+
+      <!-- ====== SETUP BAND ====== -->
+      <text x="60" y="34" font-size="11" letter-spacing="3" fill="var(--ink-3)">SETUP — ONCE PER PARTY</text>
+      <rect x="60" y="46" width="940" height="190" fill="none" stroke="var(--line)"/>
+      <!-- supplier row -->
+      <text x="82" y="76" font-size="11" fill="var(--ink-2)">SUPPLIER</text>
+      <rect x="82" y="88" width="240" height="58" rx="3" fill="var(--petrol-soft)" stroke="var(--petrol)"/>
+      <text x="202" y="112" font-size="13" text-anchor="middle" font-weight="bold">KYC approved</text>
+      <text x="202" y="130" font-size="11" text-anchor="middle" fill="var(--ink-2)">the onboarding gate</text>
+      <line x1="322" y1="117" x2="352" y2="117" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+      <rect x="356" y="88" width="250" height="58" rx="3" fill="var(--petrol-soft)" stroke="var(--petrol)"/>
+      <text x="481" y="112" font-size="13" text-anchor="middle" font-weight="bold">Credit assessment</text>
+      <text x="481" y="130" font-size="11" text-anchor="middle" fill="var(--ink-2)">scorecard → buyer rating bands</text>
+      <line x1="606" y1="117" x2="636" y2="117" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+      <rect x="640" y="82" width="336" height="70" rx="3" fill="var(--brass-soft)" stroke="var(--brass)"/>
+      <text x="808" y="104" font-size="13" text-anchor="middle" font-weight="bold">RPA signed ◈</text>
+      <text x="808" y="122" font-size="11" text-anchor="middle" fill="var(--ink-2)">grid · tier schedule · facility limit</text>
+      <text x="808" y="138" font-size="11" text-anchor="middle" fill="var(--ink-2)">per-buyer sub-limits</text>
+      <!-- funder row -->
+      <text x="82" y="178" font-size="11" fill="var(--ink-2)">FUNDER</text>
+      <rect x="82" y="188" width="240" height="40" rx="3" fill="var(--card)" stroke="var(--ink-2)"/>
+      <text x="202" y="213" font-size="12" text-anchor="middle">chooses: on-demand | facility</text>
+      <line x1="322" y1="208" x2="352" y2="208" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+      <rect x="356" y="188" width="620" height="40" rx="3" fill="var(--card)" stroke="var(--ink-2)"/>
+      <text x="666" y="213" font-size="12" text-anchor="middle">committed model: escrow funded · mandate set — min tier, concentration</text>
+
+      <!-- down arrow into deal loop -->
+      <line x1="530" y1="236" x2="530" y2="284" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="545" y="266" font-size="11" fill="var(--ink-3)">PER INVOICE ↓</text>
+
+      <!-- ====== LEDGER SPINE ====== -->
+      <line x1="96" y1="300" x2="96" y2="1560" stroke="var(--brass)" stroke-width="2"/>
+      <text x="96" y="1590" font-size="11" text-anchor="middle" fill="var(--brass)">LEDGER</text>
+      <text x="96" y="1606" font-size="10" text-anchor="middle" fill="var(--ink-3)">events + entries</text>
+
+      <!-- station template: box x=200 w=560 -->
+      <!-- S1 invoice arrives -->
+      <g>
+        <rect x="200" y="300" width="560" height="64" rx="3" fill="var(--card)" stroke="var(--ink)"/>
+        <text x="480" y="326" font-size="14" text-anchor="middle" font-weight="bold">Invoice arrives</text>
+        <text x="480" y="346" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">uploaded (T0) · or pulled from the source system (T1)</text>
+      </g>
+      <line x1="480" y1="364" x2="480" y2="394" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S2 eligibility -->
+      <g>
+        <rect x="200" y="396" width="560" height="64" rx="3" fill="var(--card)" stroke="var(--ink)"/>
+        <text x="480" y="422" font-size="14" text-anchor="middle" font-weight="bold">Eligibility — rules, not judgement</text>
+        <text x="480" y="442" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">jurisdiction · USD · tenor 30–90d · corporate debtor</text>
+        <line x1="760" y1="428" x2="812" y2="428" stroke="var(--refuse)" marker-end="url(#arR)"/>
+        <rect x="816" y="410" width="196" height="36" rx="18" fill="var(--refuse-soft)" stroke="var(--refuse)"/>
+        <text x="914" y="432" font-size="11" text-anchor="middle" fill="var(--refuse)">refused: failing rule named</text>
+      </g>
+      <line x1="480" y1="460" x2="480" y2="490" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S3 verification -->
+      <g>
+        <rect x="200" y="492" width="560" height="76" rx="3" fill="var(--card)" stroke="var(--ink)"/>
+        <text x="480" y="518" font-size="14" text-anchor="middle" font-weight="bold">Verification — evidence per claim</text>
+        <text x="480" y="538" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">T2: B/L matched to invoice (DCSA) · T3: debtor confirm link</text>
+        <text x="480" y="556" font-size="11.5" text-anchor="middle" fill="var(--brass)">tier derived from attestations · attested on-chain ◈</text>
+        <line x1="760" y1="530" x2="812" y2="530" stroke="var(--refuse)" marker-end="url(#arR)"/>
+        <rect x="816" y="512" width="196" height="36" rx="18" fill="var(--refuse-soft)" stroke="var(--refuse)"/>
+        <text x="914" y="534" font-size="11" text-anchor="middle" fill="var(--refuse)">unsupported tier demotes</text>
+      </g>
+      <line x1="480" y1="568" x2="480" y2="598" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S4 limits -->
+      <g>
+        <rect x="200" y="600" width="560" height="76" rx="3" fill="var(--card)" stroke="var(--ink)"/>
+        <text x="480" y="626" font-size="14" text-anchor="middle" font-weight="bold">Limits — three levels, from the ledger</text>
+        <text x="480" y="646" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">supplier facility · supplier×buyer sub-limit · platform debtor</text>
+        <text x="480" y="664" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">insured: sub-limit = min(internal, carrier)</text>
+        <line x1="760" y1="638" x2="812" y2="638" stroke="var(--refuse)" marker-end="url(#arR)"/>
+        <rect x="816" y="620" width="196" height="36" rx="18" fill="var(--refuse-soft)" stroke="var(--refuse)"/>
+        <text x="914" y="637" font-size="11" text-anchor="middle" fill="var(--refuse)">refused: binding limit</text>
+        <text x="914" y="650" font-size="11" text-anchor="middle" fill="var(--refuse)">+ its arithmetic</text>
+      </g>
+      <line x1="480" y1="676" x2="480" y2="706" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S5 pricing -->
+      <g>
+        <rect x="200" y="708" width="560" height="64" rx="3" fill="var(--petrol-soft)" stroke="var(--petrol)"/>
+        <text x="480" y="734" font-size="14" text-anchor="middle" font-weight="bold">Priced from the signed grid</text>
+        <text x="480" y="754" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">rate = buyer band × tenor · advance = tier schedule · nobody types a rate</text>
+      </g>
+      <line x1="480" y1="772" x2="480" y2="802" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S6 rail decision -->
+      <g>
+        <rect x="200" y="804" width="560" height="64" rx="3" fill="var(--petrol-soft)" stroke="var(--petrol)"/>
+        <text x="480" y="830" font-size="14" text-anchor="middle" font-weight="bold">Rail decision — per leg, priced</text>
+        <text x="480" y="850" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">deterministic recommendation · human overrule recorded with reason</text>
+      </g>
+      <line x1="480" y1="868" x2="480" y2="898" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S7 insurance optional -->
+      <g>
+        <rect x="200" y="900" width="560" height="64" rx="3" fill="var(--card)" stroke="var(--ink-2)" stroke-dasharray="6 4"/>
+        <text x="480" y="926" font-size="14" text-anchor="middle" font-weight="bold">Insured variant — optional</text>
+        <text x="480" y="946" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">carrier limit checked · cover bound at funding · premium is pass-through</text>
+      </g>
+      <line x1="480" y1="964" x2="480" y2="994" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S8 funding -->
+      <g>
+        <rect x="200" y="996" width="560" height="76" rx="3" fill="var(--card)" stroke="var(--ink)" stroke-width="2"/>
+        <text x="480" y="1022" font-size="14" text-anchor="middle" font-weight="bold">Funding — leg 1</text>
+        <text x="480" y="1042" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">on-demand: funder pays this deal · committed: facility auto-draws</text>
+        <text x="480" y="1060" font-size="11.5" text-anchor="middle" fill="var(--brass)">escrow checks attested tier ≥ mandate ◈ · pricing snapshots here</text>
+        <line x1="760" y1="1034" x2="812" y2="1034" stroke="var(--refuse)" marker-end="url(#arR)"/>
+        <rect x="816" y="1016" width="196" height="36" rx="18" fill="var(--refuse-soft)" stroke="var(--refuse)"/>
+        <text x="914" y="1033" font-size="11" text-anchor="middle" fill="var(--refuse)">under-evidenced</text>
+        <text x="914" y="1046" font-size="11" text-anchor="middle" fill="var(--refuse)">cannot draw</text>
+        <rect x="90" y="1028" width="12" height="12" fill="var(--brass)"/>
+        <line x1="102" y1="1034" x2="200" y2="1034" stroke="var(--brass)" stroke-dasharray="3 3"/>
+      </g>
+      <line x1="480" y1="1072" x2="480" y2="1102" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S9 disbursement -->
+      <g>
+        <rect x="200" y="1104" width="560" height="64" rx="3" fill="var(--card)" stroke="var(--ink)" stroke-width="2"/>
+        <text x="480" y="1130" font-size="14" text-anchor="middle" font-weight="bold">Disbursement — supplier paid · leg 2</text>
+        <text x="480" y="1150" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">(+2a convert, hybrid) · instruction integrity · dual control over threshold</text>
+        <rect x="90" y="1130" width="12" height="12" fill="var(--brass)"/>
+        <line x1="102" y1="1136" x2="200" y2="1136" stroke="var(--brass)" stroke-dasharray="3 3"/>
+      </g>
+      <line x1="480" y1="1168" x2="480" y2="1198" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S10 maturity/repayment -->
+      <g>
+        <rect x="200" y="1200" width="560" height="76" rx="3" fill="var(--card)" stroke="var(--ink)" stroke-width="2"/>
+        <text x="480" y="1226" font-size="14" text-anchor="middle" font-weight="bold">Maturity — debtor pays on its own rail · leg 3</text>
+        <text x="480" y="1246" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">lands in unapplied cash → reconciliation matches, or holds</text>
+        <text x="480" y="1264" font-size="11.5" text-anchor="middle" fill="var(--ink-2)">unpaid → matured-unpaid state · reversals regress, never edit</text>
+        <line x1="760" y1="1238" x2="812" y2="1238" stroke="var(--refuse)" marker-end="url(#arR)"/>
+        <rect x="816" y="1220" width="196" height="36" rx="18" fill="var(--refuse-soft)" stroke="var(--refuse)"/>
+        <text x="914" y="1237" font-size="11" text-anchor="middle" fill="var(--refuse)">5 exceptions: held,</text>
+        <text x="914" y="1250" font-size="11" text-anchor="middle" fill="var(--refuse)">aged, worked oldest-first</text>
+        <rect x="90" y="1232" width="12" height="12" fill="var(--brass)"/>
+        <line x1="102" y1="1238" x2="200" y2="1238" stroke="var(--brass)" stroke-dasharray="3 3"/>
+      </g>
+      <line x1="480" y1="1276" x2="480" y2="1306" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S11 waterfall -->
+      <g>
+        <rect x="200" y="1308" width="560" height="64" rx="3" fill="var(--card)" stroke="var(--ink)" stroke-width="2"/>
+        <text x="480" y="1330" font-size="14" text-anchor="middle" font-weight="bold">Waterfall — legs 4 · 5 (+3a convert)</text>
+        <text x="480" y="1349" font-size="11" text-anchor="middle" fill="var(--ink-2)">funder principal first → supplier residual absorbs shortfall</text>
+        <text x="480" y="1364" font-size="11" text-anchor="middle" fill="var(--ink-2)">margin was banked at funding</text>
+        <rect x="90" y="1334" width="12" height="12" fill="var(--brass)"/>
+        <line x1="102" y1="1340" x2="200" y2="1340" stroke="var(--brass)" stroke-dasharray="3 3"/>
+      </g>
+      <line x1="480" y1="1372" x2="480" y2="1402" stroke="var(--ink-2)" marker-end="url(#ar)"/>
+
+      <!-- S12 settled -->
+      <g>
+        <rect x="200" y="1404" width="560" height="64" rx="3" fill="var(--petrol)"/>
+        <text x="480" y="1430" font-size="14" text-anchor="middle" font-weight="bold" fill="var(--paper)">Settled — the proof survives</text>
+        <text x="480" y="1450" font-size="11.5" text-anchor="middle" fill="var(--paper)" opacity="0.85">events never delete · daily proof: ledger = bank = chain, every account</text>
+        <rect x="90" y="1430" width="12" height="12" fill="var(--brass)"/>
+        <line x1="102" y1="1436" x2="200" y2="1436" stroke="var(--brass)" stroke-dasharray="3 3"/>
+      </g>
+
+      <!-- annotation under settled -->
+      <text x="480" y="1502" font-size="11" text-anchor="middle" fill="var(--ink-3)">every money station ticks the ledger spine — balances are derived, never stored</text>
+    </svg>
+    </div>
+    <div class="legend">
+      <span><span class="chip" style="background:var(--refuse)"></span>refusal path — the stage states what it knows</span>
+      <span><span class="chip" style="background:var(--brass)"></span>◈ signed artefact / on-chain attestation · ledger tick</span>
+      <span><span class="chip" style="background:var(--petrol)"></span>deterministic — same input, same answer</span>
+      <span><span class="chip" style="background:var(--card);border:1.5px dashed var(--ink-2)"></span>optional path</span>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ PLATE 2 ══════════════════════ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-no">PLATE 2</span>
+      <h2>The money map — five legs, two hidden ones, three modes</h2>
+      <p>The platform controls four of the five legs; leg 3 belongs to the debtor. Hybrid mode
+      makes the platform the converter — legs 2a and 3a move value between its own treasuries.</p>
+    </div>
+    <div class="plate-body">
+    <svg viewBox="0 0 1060 700" role="img" aria-label="Money legs between funder, platform, supplier and debtor, with rail-by-mode matrix">
+      <defs>
+        <marker id="arF" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--fiat)"/>
+        </marker>
+        <marker id="arT" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--token)"/>
+        </marker>
+        <marker id="arB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--brass)"/>
+        </marker>
+      </defs>
+
+      <!-- FUNDER -->
+      <rect x="50" y="90" width="190" height="150" rx="3" fill="var(--card)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="145" y="118" font-size="13" text-anchor="middle" font-weight="bold">FUNDER</text>
+      <text x="145" y="140" font-size="11" text-anchor="middle" fill="var(--ink-2)">on-demand, or</text>
+      <text x="145" y="156" font-size="11" text-anchor="middle" fill="var(--ink-2)">committed facility</text>
+      <rect x="70" y="172" width="150" height="48" rx="3" fill="var(--brass-soft)" stroke="var(--brass)"/>
+      <text x="145" y="192" font-size="11" text-anchor="middle" fill="var(--brass)" font-weight="bold">ESCROW ◈</text>
+      <text x="145" y="208" font-size="10" text-anchor="middle" fill="var(--ink-2)">draws if tier ≥ mandate</text>
+
+      <!-- PLATFORM -->
+      <rect x="400" y="60" width="280" height="360" rx="3" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <text x="540" y="88" font-size="13" text-anchor="middle" font-weight="bold">PLATFORM</text>
+      <rect x="424" y="106" width="232" height="66" rx="3" fill="var(--token-soft)" stroke="var(--token)"/>
+      <text x="540" y="132" font-size="12" text-anchor="middle" font-weight="bold" fill="var(--token)">TOKEN TREASURY</text>
+      <text x="540" y="152" font-size="10.5" text-anchor="middle" fill="var(--ink-2)">USDC · mock Open USD — labelled</text>
+      <rect x="424" y="256" width="232" height="66" rx="3" fill="var(--fiat-soft)" stroke="var(--fiat)"/>
+      <text x="540" y="282" font-size="12" text-anchor="middle" font-weight="bold" fill="var(--fiat)">FIAT TREASURY</text>
+      <text x="540" y="302" font-size="10.5" text-anchor="middle" fill="var(--ink-2)">Circle sandbox · bank account</text>
+      <!-- conversion legs -->
+      <line x1="500" y1="172" x2="500" y2="256" stroke="var(--brass)" stroke-dasharray="6 4" stroke-width="2" marker-end="url(#arB)"/>
+      <text x="488" y="218" font-size="10.5" text-anchor="end" fill="var(--brass)">2a redeem</text>
+      <line x1="580" y1="256" x2="580" y2="172" stroke="var(--brass)" stroke-dasharray="6 4" stroke-width="2" marker-end="url(#arB)"/>
+      <text x="592" y="218" font-size="10.5" fill="var(--brass)">3a mint</text>
+      <!-- unapplied cash -->
+      <rect x="424" y="344" width="232" height="52" rx="26" fill="var(--card)" stroke="var(--refuse)"/>
+      <text x="540" y="366" font-size="11" text-anchor="middle" fill="var(--refuse)" font-weight="bold">UNAPPLIED CASH</text>
+      <text x="540" y="382" font-size="10" text-anchor="middle" fill="var(--ink-2)">matched → applied · else held &amp; aged</text>
+
+      <!-- SUPPLIER -->
+      <rect x="830" y="90" width="190" height="110" rx="3" fill="var(--card)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="925" y="118" font-size="13" text-anchor="middle" font-weight="bold">SUPPLIER</text>
+      <text x="925" y="140" font-size="11" text-anchor="middle" fill="var(--ink-2)">paid in minutes —</text>
+      <text x="925" y="156" font-size="11" text-anchor="middle" fill="var(--ink-2)">time-to-cash is the product</text>
+      <text x="925" y="180" font-size="10.5" text-anchor="middle" fill="var(--ink-3)">RPA governs the programme</text>
+
+      <!-- DEBTOR -->
+      <rect x="830" y="330" width="190" height="110" rx="3" fill="var(--card)" stroke="var(--ink-2)" stroke-dasharray="7 4" stroke-width="2"/>
+      <text x="925" y="358" font-size="13" text-anchor="middle" font-weight="bold">DEBTOR</text>
+      <text x="925" y="380" font-size="10.5" text-anchor="middle" fill="var(--ink-2)">pays on its own rail —</text>
+      <text x="925" y="396" font-size="10.5" text-anchor="middle" fill="var(--ink-2)">nobody the platform controls</text>
+      <text x="925" y="420" font-size="10.5" text-anchor="middle" fill="var(--petrol)">T3 confirm link lives here</text>
+
+      <!-- LEGS -->
+      <!-- L1 funder -> platform token -->
+      <line x1="240" y1="139" x2="424" y2="139" stroke="var(--token)" stroke-width="2.5" marker-end="url(#arT)"/>
+      <rect x="298" y="120" width="30" height="20" rx="3" fill="var(--ink)"/>
+      <text x="313" y="134" font-size="11" text-anchor="middle" fill="var(--paper)">L1</text>
+      <text x="313" y="160" font-size="10" text-anchor="middle" fill="var(--ink-2)">financing</text>
+
+      <!-- L4 platform token -> funder -->
+      <line x1="424" y1="200" x2="240" y2="200" stroke="var(--token)" stroke-width="2.5" marker-end="url(#arT)"/>
+      <rect x="298" y="181" width="30" height="20" rx="3" fill="var(--ink)"/>
+      <text x="313" y="195" font-size="11" text-anchor="middle" fill="var(--paper)">L4</text>
+      <text x="313" y="221" font-size="10" text-anchor="middle" fill="var(--ink-2)">payout — principal first</text>
+
+      <!-- L2 platform fiat -> supplier -->
+      <line x1="656" y1="139" x2="830" y2="139" stroke="var(--fiat)" stroke-width="2.5" marker-end="url(#arF)"/>
+      <rect x="722" y="120" width="30" height="20" rx="3" fill="var(--ink)"/>
+      <text x="737" y="134" font-size="11" text-anchor="middle" fill="var(--paper)">L2</text>
+      <text x="737" y="160" font-size="10" text-anchor="middle" fill="var(--ink-2)">disbursement</text>
+
+      <!-- L5 residual -->
+      <line x1="656" y1="200" x2="830" y2="200" stroke="var(--fiat)" stroke-width="2.5" stroke-dasharray="2 4" marker-end="url(#arF)"/>
+      <rect x="722" y="181" width="30" height="20" rx="3" fill="var(--ink)"/>
+      <text x="737" y="195" font-size="11" text-anchor="middle" fill="var(--paper)">L5</text>
+      <text x="737" y="221" font-size="10" text-anchor="middle" fill="var(--ink-2)">residual, at maturity</text>
+
+      <!-- L3 debtor -> platform fiat (via unapplied) -->
+      <line x1="830" y1="380" x2="656" y2="376" stroke="var(--fiat)" stroke-width="2.5" marker-end="url(#arF)"/>
+      <rect x="726" y="356" width="30" height="20" rx="3" fill="var(--ink)"/>
+      <text x="741" y="370" font-size="11" text-anchor="middle" fill="var(--paper)">L3</text>
+      <text x="741" y="398" font-size="10" text-anchor="middle" fill="var(--ink-2)">repayment</text>
+
+      <!-- mode matrix -->
+      <text x="50" y="500" font-size="11" letter-spacing="3" fill="var(--ink-3)">RAIL BY MODE — THE CHOICE THAT IS PRICED</text>
+      <g font-size="11.5">
+        <text x="120" y="536" fill="var(--ink-2)">leg</text>
+        <text x="300" y="536" text-anchor="middle" fill="var(--ink-2)">1 · all-fiat</text>
+        <text x="560" y="536" text-anchor="middle" fill="var(--ink-2)">2 · hybrid</text>
+        <text x="830" y="536" text-anchor="middle" fill="var(--ink-2)">3 · all-stablecoin</text>
+      </g>
+      <line x1="50" y1="548" x2="1010" y2="548" stroke="var(--line)"/>
+      <!-- rows -->
+      <g font-size="11.5">
+        <text x="120" y="576">L1 financing</text>
+        <rect x="240" y="562" width="120" height="20" rx="10" fill="var(--fiat-soft)" stroke="var(--fiat)"/><text x="300" y="576" text-anchor="middle" fill="var(--fiat)">fiat</text>
+        <rect x="500" y="562" width="120" height="20" rx="10" fill="var(--token-soft)" stroke="var(--token)"/><text x="560" y="576" text-anchor="middle" fill="var(--token)">token</text>
+        <rect x="770" y="562" width="120" height="20" rx="10" fill="var(--token-soft)" stroke="var(--token)"/><text x="830" y="576" text-anchor="middle" fill="var(--token)">token</text>
+
+        <text x="120" y="604">L2 disbursement</text>
+        <rect x="240" y="590" width="120" height="20" rx="10" fill="var(--fiat-soft)" stroke="var(--fiat)"/><text x="300" y="604" text-anchor="middle" fill="var(--fiat)">fiat</text>
+        <rect x="500" y="590" width="120" height="20" rx="10" fill="var(--fiat-soft)" stroke="var(--fiat)"/><text x="560" y="604" text-anchor="middle" fill="var(--fiat)">fiat · via 2a</text>
+        <rect x="770" y="590" width="120" height="20" rx="10" fill="var(--token-soft)" stroke="var(--token)"/><text x="830" y="604" text-anchor="middle" fill="var(--token)">token</text>
+
+        <text x="120" y="632">L3 repayment</text>
+        <rect x="240" y="618" width="120" height="20" rx="10" fill="var(--fiat-soft)" stroke="var(--fiat)"/><text x="300" y="632" text-anchor="middle" fill="var(--fiat)">fiat</text>
+        <rect x="500" y="618" width="120" height="20" rx="10" fill="var(--fiat-soft)" stroke="var(--fiat)"/><text x="560" y="632" text-anchor="middle" fill="var(--fiat)">debtor's choice</text>
+        <rect x="758" y="618" width="144" height="20" rx="10" fill="var(--token-soft)" stroke="var(--token)"/><text x="830" y="632" text-anchor="middle" fill="var(--token)">token — if debtor</text>
+
+        <text x="120" y="660">L4 · L5 payout, residual</text>
+        <rect x="240" y="646" width="120" height="20" rx="10" fill="var(--fiat-soft)" stroke="var(--fiat)"/><text x="300" y="660" text-anchor="middle" fill="var(--fiat)">fiat</text>
+        <rect x="500" y="646" width="120" height="20" rx="10" fill="var(--token-soft)" stroke="var(--token)"/><text x="560" y="660" text-anchor="middle" fill="var(--token)">token · via 3a</text>
+        <rect x="770" y="646" width="120" height="20" rx="10" fill="var(--token-soft)" stroke="var(--token)"/><text x="830" y="660" text-anchor="middle" fill="var(--token)">token</text>
+      </g>
+    </svg>
+    </div>
+    <div class="legend">
+      <span><span class="chip" style="background:var(--fiat)"></span>fiat rail — hours to days, reversible for a period</span>
+      <span><span class="chip" style="background:var(--token)"></span>stablecoin rail — seconds, final at confirmation</span>
+      <span><span class="chip" style="background:var(--brass)"></span>conversion legs 2a / 3a — the platform is the converter (hybrid)</span>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ PLATE 3 ══════════════════════ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-no">PLATE 3</span>
+      <h2>Assurance tiers — what each attestor rules out</h2>
+      <p>Fraud, in evidence terms, is a claim attested only by the supplier. Each tier adds an
+      independent attestor; the tier sets eligibility and advance rate through the RPA's schedule —
+      never the rate.</p>
+    </div>
+    <div class="plate-body">
+    <svg viewBox="0 0 1060 260" role="img" aria-label="Verification tiers T0 to T3">
+      <defs>
+        <marker id="ar3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2)"/>
+        </marker>
+      </defs>
+      <g>
+        <rect x="24" y="50" width="236" height="110" rx="3" fill="var(--card)" stroke="var(--ink-2)"/>
+        <text x="142" y="80" font-size="15" text-anchor="middle" font-weight="bold">T0 · self-declared</text>
+        <text x="142" y="104" font-size="10.5" text-anchor="middle" fill="var(--ink-2)">an uploaded document</text>
+        <text x="142" y="130" font-size="11" text-anchor="middle" fill="var(--refuse)">defeats: nothing</text>
+        <text x="142" y="148" font-size="10.5" text-anchor="middle" fill="var(--ink-3)">reduced advance, or ineligible</text>
+      </g>
+      <line x1="260" y1="105" x2="282" y2="105" stroke="var(--ink-2)" marker-end="url(#ar3)"/>
+      <g>
+        <rect x="286" y="50" width="236" height="110" rx="3" fill="var(--card)" stroke="var(--ink)"/>
+        <text x="404" y="80" font-size="15" text-anchor="middle" font-weight="bold">T1 · source-pulled</text>
+        <text x="404" y="104" font-size="10.5" text-anchor="middle" fill="var(--ink-2)">pulled from the source system</text>
+        <text x="404" y="130" font-size="11" text-anchor="middle" fill="var(--petrol)">defeats: fabricated documents</text>
+        <text x="404" y="148" font-size="10.5" text-anchor="middle" fill="var(--ink-3)">the channel is the fraud control</text>
+      </g>
+      <line x1="522" y1="105" x2="544" y2="105" stroke="var(--ink-2)" marker-end="url(#ar3)"/>
+      <g>
+        <rect x="548" y="50" width="236" height="110" rx="3" fill="var(--card)" stroke="var(--ink)"/>
+        <text x="666" y="80" font-size="15" text-anchor="middle" font-weight="bold">T2 · shipment-verified</text>
+        <text x="666" y="104" font-size="10.5" text-anchor="middle" fill="var(--ink-2)">B/L matched to the invoice · DCSA</text>
+        <text x="666" y="130" font-size="11" text-anchor="middle" fill="var(--petrol)">defeats: paper trades</text>
+        <text x="666" y="148" font-size="10.5" text-anchor="middle" fill="var(--ink-3)">services trades: no carrier, no T2</text>
+      </g>
+      <line x1="784" y1="105" x2="806" y2="105" stroke="var(--ink-2)" marker-end="url(#ar3)"/>
+      <g>
+        <rect x="810" y="50" width="236" height="110" rx="3" fill="var(--petrol-soft)" stroke="var(--petrol)" stroke-width="2"/>
+        <text x="928" y="80" font-size="15" text-anchor="middle" font-weight="bold">T3 · debtor-confirmed</text>
+        <text x="928" y="104" font-size="10.5" text-anchor="middle" fill="var(--ink-2)">single-use confirm link · no portal</text>
+        <text x="928" y="130" font-size="11" text-anchor="middle" fill="var(--petrol)">defeats: all but collusion</text>
+        <text x="928" y="148" font-size="10.5" text-anchor="middle" fill="var(--ink-3)">full advance under the schedule</text>
+      </g>
+      <rect x="40" y="192" width="980" height="42" rx="3" fill="var(--brass-soft)" stroke="var(--brass)"/>
+      <text x="530" y="212" font-size="12" text-anchor="middle" fill="var(--brass)" font-weight="bold">◈ at funding: tier attested on-chain — tamper-evident, not independently true — and the escrow can refuse it</text>
+      <text x="530" y="228" font-size="10.5" text-anchor="middle" fill="var(--ink-2)">residuals stated: supplier–debtor collusion · services trades · cross-lender doubles without a market registry</text>
+    </svg>
+    </div>
+  </section>
+
+  <p class="foot">Drawn from <code>PRODUCT_PAPER.md</code> v8 and <code>PRD.md</code> v0.3
+  (trade-finance-rails, 2026-09-06). Plates follow the paper's mechanics — §7 for Plate 1,
+  §5–§7 for Plate 2, the verification subsection for Plate 3. Nothing here is a screen design;
+  Design-phase work per cycle remains the authority on UI.</p>
+</div>
