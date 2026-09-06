@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
+/* The identity spec, design.md §5 — one light theme, done properly (dark is
+   deliberately not designed in cycle 0). Semantic colours are reserved:
+   good = booked/settled, flight = initiated-not-settled, refuse = refusals
+   and nothing else. Provenance is NEVER a colour — it is the dashed badge. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f0f1f4;
+  --card: #ffffff;
+  --surface: #f7f8fa;
+  --ink: #16192e;
+  --muted: #5a6072;
+  --line: #dfe2ea;
+  --cobalt: #2742f5;
+  --good: #0e9f6e;
+  --flight: #b45309;
+  --refuse: #c81e1e;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-cobalt: var(--cobalt);
+  --color-good: var(--good);
+  --color-flight: var(--flight);
+  --color-refuse: var(--refuse);
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+  --radius-card: 10px;
+  --shadow-card: 0 1px 3px rgb(22 25 46 / 0.07), 0 4px 14px rgb(22 25 46 / 0.06);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
 }

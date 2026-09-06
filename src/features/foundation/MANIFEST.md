@@ -69,7 +69,20 @@ push (no remote exists).
 - `src/lib/domain/states.ts` + `states.test.ts` — the 5-state machine, full
   25-pair matrix pinned (4 legal), refusals name their rule (A2)
 
-## Files modified
+- `src/app/globals.css` (rewritten) — the identity tokens as Tailwind theme:
+  paper/card/surface/ink/muted/line + cobalt + reserved good/flight/refuse (A3)
+- `src/lib/cn.ts` — dependency-free class join (A3)
+- `src/components/role-switch.tsx` — segmented four-seat nav (visual; cookie
+  identity arrives at A4) (A3)
+- `src/components/ui/{card,button,table,status-pill,provenance-badge,amount}.tsx`
+  — the first vocabulary; provenance = dashed badge with the word, never a
+  colour; every amount renders through Amount (mono, tabular, minor units) (A3)
+- `src/components/deal-timeline.tsx` — spine timeline incl. the refused branch (A3)
+- `src/lib/queries.ts` — read-side joins for every surface; movements grouped
+  per event; balances via lib/ledger only (A3)
+- `src/app/{page,supplier/page,ops/page,ops/deals/[id]/page,ops/ledger/page,funder/page,pay/page,pay/[invoiceId]/page}.tsx`
+  — landing + the six designed surfaces, all force-dynamic, reading live
+  Neon; gates rendered disabled until A5; pay stub public and labelled (A3)
 
 - `STACK_RULES.md` — gate section rewritten with real numbers; framework
   versions pinned; Next 16 quirks re-verified against installed local docs (A0)
@@ -97,5 +110,11 @@ push (no remote exists).
   across the chart). Domain modules use relative .ts-extension imports so
   node-run scripts resolve them; Turbopack build confirmed fine with it.
   Files also touched: scripts/seed.mts (backdrop), src/db/client.ts
-  (./schema→./schema.ts), tests/gate.test.ts deleted. Last verified prompt:
-  **A2**. Next: A3 (screens).
+  (./schema→./schema.ts), tests/gate.test.ts deleted.
+- 2026-09-06 · A3: identity layer (Instrument Sans + IBM Plex Mono via
+  next/font, token palette in globals.css), 6 ui primitives, role-switch
+  shell, and all seven routes serving live Neon data — verified by curl
+  against the production server (amounts, statuses, evidence badges all
+  present; smoke leg 1 "boots with role switch" now walkable). Layout.tsx
+  also modified (shell + banner + fonts). Gates green (tsc · lint · 31/31 ·
+  build). Last verified prompt: **A3**. Next: A4 (getIdentity() + role gate).
