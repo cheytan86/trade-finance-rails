@@ -5,7 +5,16 @@ import type { Seat } from "@/lib/roles/parse";
 
 // What a wrong-seat visitor sees instead of data: whose surface this is, and
 // the one-click switch. Never the content (design §6).
-export function RoleGate({ required, current }: { required: Seat; current: Seat }) {
+export function RoleGate({
+  required,
+  current,
+  returnTo,
+}: {
+  required: Seat;
+  current: Seat;
+  /** where the visitor was heading — the switch lands them there, not at the seat home */
+  returnTo?: string;
+}) {
   return (
     <div className="mx-auto max-w-md pt-10">
       <Card title={`This surface belongs to ${required === "ops" ? "platform ops" : `the ${required}`}`}>
@@ -16,6 +25,7 @@ export function RoleGate({ required, current }: { required: Seat; current: Seat 
         </p>
         <form action={switchSeat} className="mt-4">
           <input type="hidden" name="seat" value={required} />
+          {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
           <Button type="submit">Switch to {required}</Button>
         </form>
       </Card>

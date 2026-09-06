@@ -14,10 +14,13 @@ import type { Seat } from "./parse";
  * so a wrong-seat request returns the gate card and the page's queries
  * NEVER RUN.
  */
-export async function seatGate(required: Seat): Promise<React.ReactNode | null> {
+export async function seatGate(
+  required: Seat,
+  returnTo?: string,
+): Promise<React.ReactNode | null> {
   const identity = await getIdentity();
   if (identity && identity.seat !== required) {
-    return <RoleGate required={required} current={identity.seat} />;
+    return <RoleGate required={required} current={identity.seat} returnTo={returnTo} />;
   }
   return null;
 }

@@ -35,3 +35,14 @@ export function parseIdentity(raw: string | undefined | null): Identity | null {
 export function serializeIdentity(id: Identity): string {
   return JSON.stringify({ seat: id.seat, partyId: id.partyId });
 }
+
+/**
+ * A redirect target from a form is a claim too. Only a same-origin absolute
+ * path survives — no scheme, no host, no protocol-relative `//evil.example`.
+ */
+export function safeLocalPath(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  if (raw.includes("\\") || /[\r\n]/.test(raw)) return null;
+  return raw;
+}

@@ -3,16 +3,21 @@ import { Card } from "@/components/ui/card";
 import { Table, Th, Td } from "@/components/ui/table";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Amount } from "@/components/ui/amount";
-import { demoFunder, funderPositions } from "@/lib/queries";
+import { funderPositions, resolvePartyForSeat } from "@/lib/queries";
 import { parseSnapshot } from "@/lib/pricing";
 import { seatGate } from "@/lib/roles/gate";
+import { getIdentity } from "@/lib/roles/identity";
 
 export const dynamic = "force-dynamic";
 
 export default async function FunderPage() {
   const gate = await seatGate("funder");
   if (gate) return gate;
-  const funder = await demoFunder();
+  const identity = await getIdentity();
+  const funder = await resolvePartyForSeat("funder", identity?.partyId);
+  if (!funder) {
+    return <p className="text-[13px] text-muted">No funder exists — run the seed script.</p>;
+  }
   const { deals, cashBalance } = await funderPositions(funder.id);
 
   return (

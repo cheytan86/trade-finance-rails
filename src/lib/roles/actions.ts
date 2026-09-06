@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { parties } from "@/db/schema";
-import { IDENTITY_COOKIE, SEATS, serializeIdentity, type Seat } from "./parse";
+import { IDENTITY_COOKIE, SEATS, serializeIdentity, safeLocalPath, type Seat } from "./parse";
 
 const SEAT_HOME: Record<Seat, string> = {
   supplier: "/supplier",
@@ -46,7 +46,10 @@ export async function switchSeat(formData: FormData) {
     path: "/",
     sameSite: "lax",
   });
-  redirect(SEAT_HOME[s]);
+  // The role-gate card passes the page the visitor was trying to reach, so
+  // switching seats lands them there instead of the seat's home. Validated —
+  // a redirect target from a form is a claim like any other.
+  redirect(safeLocalPath(formData.get("returnTo")) ?? SEAT_HOME[s]);
 }
 
 export async function actAsSupplier(formData: FormData) {

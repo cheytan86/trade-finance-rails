@@ -35,6 +35,22 @@ comparison, both funding models, the full credit layer, and verification
 tiers. Cycles 6–8 are *not* droppable — credit, limits and verification were
 each an explicit scope decision (2026-09-05/06), chosen knowing their cost.
 
+## Standing deferral — the UI and information architecture revisit
+
+**Decided 2026-09-06, Chetan, after walking the cycle-0 spine:** the screens
+work and the visual identity is settled, but the *structure* — how surfaces
+are laid out, what belongs on one screen, how an operator moves between them
+— is deliberately not being refined yet. Judging information architecture
+against six screens is guesswork; the app needs more surfaces before the
+answer is evidence rather than taste.
+
+**The trigger: revisit after cycle 4 (the priced comparison).** By then the
+headline screen exists, credit and limits are close behind, and the real
+density of the product is visible. Until then, new surfaces follow the
+cycle-0 vocabulary rather than inventing their own — drift is the thing to
+avoid while the redesign is pending, and `design-kit/DESIGN_SYSTEM_NOTES.md`
+holds the vocabulary.
+
 ## Deferrals are per-cycle, not omissions
 
 Each cycle's discovery records what it deliberately does not do and where that

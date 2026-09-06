@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { parseIdentity, serializeIdentity } from "./parse";
+import { parseIdentity, serializeIdentity, safeLocalPath } from "./parse";
+
+describe("safeLocalPath — a redirect target is a claim too", () => {
+  it("keeps same-origin absolute paths", () => {
+    expect(safeLocalPath("/ops/deals/abc")).toBe("/ops/deals/abc");
+    expect(safeLocalPath("/")).toBe("/");
+  });
+  it("refuses open-redirect shapes", () => {
+    expect(safeLocalPath("https://evil.example")).toBeNull();
+    expect(safeLocalPath("//evil.example")).toBeNull();
+    expect(safeLocalPath("javascript:alert(1)")).toBeNull();
+    expect(safeLocalPath("/x\\..\\y")).toBeNull();
+    expect(safeLocalPath("/x\r\nSet-Cookie: a=b")).toBeNull();
+    expect(safeLocalPath(null)).toBeNull();
+    expect(safeLocalPath(42)).toBeNull();
+  });
+});
 
 describe("parseIdentity — the cookie is a claim, validated like one", () => {
   it("roundtrips a valid identity", () => {

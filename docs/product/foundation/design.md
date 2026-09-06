@@ -275,8 +275,12 @@ is the named file map, so Develop's Gate 0.5 can still verify scope:
   `scripts/seed.ts`
 - Ledger core: `src/lib/ledger/` (booking module — the only writer of
   entries), `src/lib/money/` (integer minor-units helpers)
-- Copies, corrected: `src/lib/pricing/`, `src/lib/rails/verify.ts` (unwired
-  until cycle 1)
+- Copies, corrected: `src/lib/pricing/` ~~, `src/lib/rails/verify.ts`
+  (unwired until cycle 1)~~ — **contract amended 2026-09-06 at Chetan's
+  decision, surfaced by the gap audit:** the chain verifier moves to cycle 1,
+  where its corrected interface (explicit chain id, all-logs matching, bigint
+  amounts) is the settlement seam's own design and viem enters with a caller.
+  Porting it into cycle 0 would have been dead code behind a new dependency.
 - Roles: `src/lib/roles/` + the cookie switcher
 - Surfaces: the routes in §5, `src/components/ui/` primitives
 - Tests + the four gate commands (`tsc --noEmit` · lint · test · build),

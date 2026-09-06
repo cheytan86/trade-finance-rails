@@ -1,24 +1,28 @@
 import { describe, it, expect } from "vitest";
-import { assertMinorUnits, divRound, mulBps, interestActDays, formatMinor, MoneyError } from "./index";
+import {
+  divRound,
+  mulBps,
+  interestActDays,
+  formatMinor,
+  parseDecimalToMinor,
+  MoneyError,
+} from "./index";
 
-describe("assertMinorUnits — the float refusal at the boundary", () => {
-  it("accepts bigint and digit strings", () => {
-    expect(assertMinorUnits(4_080_000n, "x")).toBe(4_080_000n);
-    expect(assertMinorUnits("4080000", "x")).toBe(4_080_000n);
-    expect(assertMinorUnits("-150", "x")).toBe(-150n);
+describe("parseDecimalToMinor — the only door human-typed money comes through", () => {
+  it("accepts the shapes a person actually types", () => {
+    expect(parseDecimalToMinor("48000")).toBe(4_800_000n);
+    expect(parseDecimalToMinor("48000.00")).toBe(4_800_000n);
+    expect(parseDecimalToMinor("48,000.50")).toBe(4_800_050n);
+    expect(parseDecimalToMinor(" 150.5 ")).toBe(15_050n);
   });
-  it("refuses numbers — even whole ones — and fractions", () => {
-    expect(() => assertMinorUnits(40800.0, "faceValue")).toThrowError(MoneyError);
-    expect(() => assertMinorUnits("40800.50", "faceValue")).toThrowError(/minor units/);
-    expect(() => assertMinorUnits(null, "faceValue")).toThrowError(MoneyError);
+  it("refuses rather than rounds when the precision does not fit", () => {
+    expect(() => parseDecimalToMinor("48000.005")).toThrowError(/decimal places/);
   });
-  it("names its rule", () => {
-    try {
-      assertMinorUnits(1.5, "amount");
-      expect.unreachable();
-    } catch (e) {
-      expect((e as MoneyError).rule).toBe("money-integer");
-    }
+  it("refuses junk with a sentence naming the field", () => {
+    expect(() => parseDecimalToMinor("", 2, "Face value")).toThrowError(/Face value/);
+    expect(() => parseDecimalToMinor("1e5")).toThrowError(MoneyError);
+    expect(() => parseDecimalToMinor("48000; DROP TABLE")).toThrowError(MoneyError);
+    expect(() => parseDecimalToMinor("$48000")).toThrowError(MoneyError);
   });
 });
 

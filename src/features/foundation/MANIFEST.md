@@ -95,6 +95,21 @@ push (no remote exists).
 - `src/components/role-gate.tsx` — the wrong-seat card: names the surface,
   offers the switch, never the data (A4)
 
+- `src/lib/money` (extended) — `parseDecimalToMinor`: the only door
+  human-typed money comes through; refuses excess precision rather than
+  rounding (A5)
+- `src/lib/deals/preview.ts` + `preview.test.ts` — the two entry shapes as
+  pure functions, shared by the gate dialog and the booking action so the
+  confirmation cannot drift from the consequence (A5)
+- `src/lib/deals/actions.ts` — the five server actions: submit, approve with
+  terms, refuse with reason, fund, disburse. Seat-checked, state-checked,
+  amounts recomputed server-side, booked via lib/ledger, every failure a
+  readable sentence (A5)
+- `src/components/ui/confirm-dialog.tsx` — the human gate: shows the exact
+  entries and their Σ before booking; posts only the invoice id (A5)
+- `src/components/submit-invoice-form.tsx`, `src/components/review-form.tsx`
+  — the live supplier trigger and the ops terms/refusal forms (A5)
+
 ## Files modified
 
 - `STACK_RULES.md` — gate section rewritten with real numbers; framework
@@ -136,5 +151,39 @@ push (no remote exists).
   navigation); supplier/funder/ops pages gated via seatGate; layouts
   approach REJECTED after curl proved an RSC-payload data leak — pages gate
   instead, wrong-seat responses re-proven to carry zero data. 35 tests.
-  Gates green. Last verified prompt: **A4**. Next: A5 (human gates — the
-  spine goes live; boundary trigger fires when it does).
+  Gates green. Last verified prompt: **A4**.
+- 2026-09-06 · A5: the spine went live — submit, approve/refuse, fund,
+  disburse, each behind its gate; ConfirmDialog shows the exact entries and
+  their Σ before booking; the browser posts only `{invoiceId}` and the server
+  recomputes every figure at the consequence. 41 tests. Gates green.
+  **THE BOUNDARY TRIGGER FIRED**: `discovery-kit/YOUR_PRODUCT.md` re-audited
+  per STACK_RULES.md — real counts (8 pages, 5 tables, 41 tests), the seat
+  mechanism documented with its file:line, the three deep modules named, and
+  two architectural invariants added as greps (identity read in one place,
+  ledger written in one place — both verified holding today). From here,
+  cycle 0's output is HOST CODE. Last verified prompt: **A5**.
+  Next: Section B (native polish) → C (the five evals) → D (evidence).
+- 2026-09-06 · A5 test pass (Chetan: "test your work and fix all issues").
+  Added `src/lib/deals/spine.integration.test.ts` — the spine end to end
+  against the real database. Seven issues found and fixed; details in
+  `docs/product/foundation/develop.md`. The two that mattered: page and
+  action disagreed about identity resolution (now one rule,
+  `resolvePartyForSeat`), and terms producing a negative margin were
+  accepted (now refused with the arithmetic named). 54 tests, four gates
+  green, database returns to seeded state after each run.
+- 2026-09-06 · Sections B/C/D: the funding dialog reworded so nobody reads
+  ops as the funder ("records the funder's capital arriving"); the five
+  design evals run for real and exported to `docs/product/foundation/evals.md`
+  (5 pass, case 3 hardened because it passed without executing its guard);
+  the 8 evidence rows and the final gate written into `develop.md`; manifest
+  reconciled against `git diff --name-only main` (55 files). The UI/IA
+  revisit is a recorded standing deferral in `docs/product/CYCLES.md`,
+  triggered after cycle 4.
+- 2026-09-06 · Gap audit (Chetan): five gaps found — CAS race guards added
+  to all four transitions; terms now editable until funding per design §3
+  (tests 13b/13c); role gate carries a validated returnTo (safeLocalPath,
+  open-redirect tested); README.md written; the un-copied rails/verify.ts
+  surfaced as a contract deviation and DECIDED by Chetan: deferred to cycle 1,
+  amendment recorded in design.md with the reason. 59 tests, gates green.
+  Last verified prompt:
+  **Section D + gap audit — cycle 0 complete**, awaiting commit.

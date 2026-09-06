@@ -2,14 +2,72 @@
 // here is imported by client code. Writes never live here: money movements go
 // through src/lib/ledger, state changes through the route actions (A5).
 
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
 import { parties, invoices, accounts, settlementEvents, ledgerEntries } from "@/db/schema";
-import { balances } from "@/lib/ledger";
+import { balances, balanceOf } from "@/lib/ledger";
 
 const supplierParty = alias(parties, "supplier_party");
 const debtorParty = alias(parties, "debtor_party");
+
+export async function allDebtors() {
+  const db = getDb();
+  return db
+    .select({ id: parties.id, name: parties.name })
+    .from(parties)
+    .where(eq(parties.role, "debtor"))
+    .orderBy(asc(parties.name));
+}
+
+/**
+ * The four accounts the cycle-0 movements touch, with display labels — so a
+ * gate dialog can show the same entries the action will book.
+ */
+export async function accountRefsFor(supplierId: string) {
+  const db = getDb();
+  const rows = await db
+    .select({ id: accounts.id, kind: accounts.kind, partyId: accounts.partyId, partyName: parties.name })
+    .from(accounts)
+    .leftJoin(parties, eq(accounts.partyId, parties.id));
+  const pick = (kind: string, partyId: string | null) => {
+    const r = rows.find((x) => x.kind === kind && x.partyId === partyId);
+    return r ? { id: r.id, label: accountLabel(r.kind, r.partyName) } : null;
+  };
+  // One funder in cycle 0 (multiple funders arrive with the funding-models
+  // cycle); sorted so the choice is deterministic rather than row-order luck.
+  const funderCashRow = rows
+    .filter((r) => r.kind === "funder_cash")
+    .sort((a, b) => (a.partyName ?? "").localeCompare(b.partyName ?? ""))[0];
+  return {
+    funderCash: funderCashRow
+      ? { id: funderCashRow.id, label: accountLabel(funderCashRow.kind, funderCashRow.partyName) }
+      : null,
+    treasury: pick("platform_treasury", null),
+    supplierPayable: pick("supplier_payable", supplierId),
+    feeIncome: pick("fee_income", null),
+  };
+}
+
+/**
+ * Which party a seat is acting for — the ONE resolution rule, used by the
+ * pages and by the actions alike. A cookie's party id is honoured only if it
+ * names a real party of that role; anything else falls back to the first by
+ * name. Page and action must agree, or a screen says "acting as X" while the
+ * action refuses — which is exactly the inconsistency this replaced.
+ */
+export async function resolvePartyForSeat(
+  role: "supplier" | "funder",
+  claimedPartyId: string | null | undefined,
+) {
+  const db = getDb();
+  const candidates = await db
+    .select()
+    .from(parties)
+    .where(eq(parties.role, role))
+    .orderBy(asc(parties.name));
+  return candidates.find((p) => p.id === claimedPartyId) ?? candidates[0] ?? null;
+}
 
 export async function allSuppliers() {
   const db = getDb();
@@ -18,17 +76,6 @@ export async function allSuppliers() {
     .from(parties)
     .where(eq(parties.role, "supplier"))
     .orderBy(asc(parties.name));
-}
-
-export async function demoFunder() {
-  const db = getDb();
-  const [p] = await db
-    .select()
-    .from(parties)
-    .where(eq(parties.role, "funder"))
-    .orderBy(asc(parties.name))
-    .limit(1);
-  return p;
 }
 
 export async function invoicesForSupplier(supplierId: string) {
@@ -182,15 +229,9 @@ export async function funderPositions(funderId: string) {
   const [cash] = await db
     .select({ id: accounts.id })
     .from(accounts)
-    .where(eq(accounts.partyId, funderId));
-  const cashBalance = cash ? await balanceOfAccount(cash.id) : 0n;
+    .where(and(eq(accounts.partyId, funderId), eq(accounts.kind, "funder_cash")));
+  const cashBalance = cash ? await balanceOf(db, cash.id) : 0n;
   return { deals, cashBalance };
-}
-
-async function balanceOfAccount(accountId: string): Promise<bigint> {
-  const db = getDb();
-  const sums = await balances(db);
-  return sums.get(accountId) ?? 0n;
 }
 
 export async function latestPayableInvoiceId(): Promise<string | null> {

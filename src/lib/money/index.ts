@@ -9,19 +9,10 @@ export class MoneyError extends Error {
   }
 }
 
-/**
- * The API boundary check: accepts a bigint, or a string of digits (form
- * input), and nothing else. A float — even a whole one — is refused, because
- * a number type at a money boundary is how rounding surfaces are born.
- */
-export function assertMinorUnits(value: unknown, field: string): bigint {
-  if (typeof value === "bigint") return value;
-  if (typeof value === "string" && /^-?\d+$/.test(value)) return BigInt(value);
-  throw new MoneyError(
-    "money-integer",
-    `${field} must be an integer amount in minor units; got ${typeof value === "number" ? `number ${value}` : JSON.stringify(value)}.`,
-  );
-}
+// Money enters this system through exactly two doors, both here or beside it:
+// parseDecimalToMinor (what a person types) and pricing.parseSnapshot (what
+// storage returns). There is no third, and no path where a float becomes an
+// amount.
 
 /** Integer division rounding half away from zero — the documented rule. */
 export function divRound(numerator: bigint, denominator: bigint): bigint {
@@ -47,6 +38,30 @@ export function interestActDays(amount: bigint, bps: number, days: number): bigi
   }
   if (days < 0) throw new MoneyError("money-negative-tenor", "tenor days cannot be negative");
   return divRound(amount * BigInt(bps) * BigInt(days), 10_000n * 360n);
+}
+
+/**
+ * Form input → minor units. Accepts "48000", "48,000.00", " 48000.5 ";
+ * refuses anything with more precision than the currency has, an empty
+ * string, or stray characters. This is the ONLY place a human-typed amount
+ * becomes money, and it refuses rather than rounds.
+ */
+export function parseDecimalToMinor(input: string, minorDigits = 2, field = "amount"): bigint {
+  const cleaned = input.trim().replace(/,/g, "");
+  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) {
+    throw new MoneyError("money-unparseable", `${field} must be a number like 48000.00; got "${input}".`);
+  }
+  const [whole, frac = ""] = cleaned.split(".");
+  if (frac.length > minorDigits) {
+    throw new MoneyError(
+      "money-precision",
+      `${field} has more than ${minorDigits} decimal places, which this currency cannot hold.`,
+    );
+  }
+  const neg = whole.startsWith("-");
+  const digits = `${whole.replace("-", "")}${frac.padEnd(minorDigits, "0")}`;
+  const value = BigInt(digits);
+  return neg ? -value : value;
 }
 
 /** "4000400" → "40,004.00" — display only; never parsed back. */
