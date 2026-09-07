@@ -1,7 +1,7 @@
 # Trade Finance Rails — Programme Paper
 
 **Multi-rail settlement for receivables financing**
-Chetan Malhotra · September 2026 · v9 draft
+Chetan Malhotra · September 2026 · v10 draft
 
 > **What this document is.** A programme paper: the parent document for this
 > project. It carries the argument, the market, the mechanics, the risk framework
@@ -517,6 +517,11 @@ its own lines: the funder's portion rides with the payout, the platform's
 books to fee income, and the supplier's charge reduces the residual — visible
 lines in the ledger, never silent adjustments.
 
+One structural honesty note: the treasury this waterfall flows through makes
+the platform a de-facto custodian of money in transit, and the demonstration
+is deliberately **not** bankruptcy-remote — §10 Q18 prices the structures a
+real programme would layer on, and names the one the demo can actually show.
+
 ### Credit insurance — the insured variant
 
 Funders expect it, and §3 says why: many mandates cannot hold unrated SME-debtor
@@ -909,6 +914,45 @@ Knowing which questions gate the design is the useful part.
     capital, is the platform a custodian in law anyway — whoever holds the
     keys? The answer decides whether the escrow reduces regulatory burden or
     merely relocates it.
+18. **Is the structure bankruptcy-remote?** *(Added v10, 2026-09-07, at
+    Chetan's challenge — the question the first nine versions never asked.)*
+    As demonstrated: **no, deliberately.** The platform treasury sits in the
+    middle of every flow, so money caught mid-waterfall would be estate
+    assets in a platform insolvency — the conduit design is what keeps the
+    five legs visible, and this paper says so rather than hiding it. A real
+    programme would layer protections **by stage, not pick one** (costs
+    include the humans who run each; all figures indicative, 2026):
+    - *Stage 1 — segregation without an entity (~£45–100k/yr all-in):*
+      collections into designated trust/safeguarded accounts held for the
+      funders (the e-money safeguarding model — on insolvency the segregated
+      pool pays users ahead of all other creditors), plus a regulated
+      qualified custodian for token balances (OCC trust charters and MiCA
+      both now make custodial segregation a supervised obligation, priced
+      ~10–50bps). The daily safeguarding reconciliation is a person's job,
+      not a habit — headcount is part of the cost.
+    - *Stage 2 — the entity, when institutional funders demand opinions
+      (+€45–90k/yr):* a Luxembourg securitisation vehicle with statutorily
+      ring-fenced compartments (one vehicle, every future programme), or a
+      Delaware Series LLC where cost dominates (~$500/yr structure; the
+      true-sale and non-consolidation opinions, $50–250k, are the real
+      price and arrive with the funders who require them).
+    - *Alternatives priced and set aside:* Guernsey/Jersey protected cell
+      companies (~£12–28k/yr — capable, offshore-optics cost with EU/UK
+      SMEs); the classic orphan SPV (the Stage-2 endgame at rated scale);
+      the direct-flow servicer model where the platform never touches money
+      (conceptually strongest, but its ops headcount scales with deal
+      volume — the wrong shape for an automation platform); an own e-money
+      licence (~£600k+ in year one once MLRO, compliance staff and capital
+      are real — a scale decision, not a structure).
+    - *The demonstrable rung:* the facility escrow (see the contracts
+      cycle) generalizes into **client-money segregation the demo can
+      actually run** — funds held by contract logic rather than platform
+      keys, with the account-level proof beside it. Its legal
+      characterization is Q17's open question; its mechanics are the one
+      structure on this list a reader can watch working. From the fiat-rail
+      cycle onward the build adopts the segregation *shape* regardless:
+      client money and the platform's own funds never share an account or
+      a wallet.
 
 **Question 11 is the one this project can actually contribute to**, because the
 ledger design is an answer to *"what evidence would satisfy someone who has to

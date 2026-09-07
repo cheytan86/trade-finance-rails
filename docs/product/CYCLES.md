@@ -24,7 +24,7 @@ that was expected FULL. Cycle 0's ran 2026-09-06: FULL, four of five.
 | 7 | **Limits & portfolio** — supplier facility · supplier×buyer sub-limit + concentration rule · platform debtor limit; watchlist, DPD | FULL | 5, 6 | Limits enforce against ledger positions (5) using ratings (6). Refusal names which level binds and shows its arithmetic. |
 | 8 | **Invoice verification** — assurance tiers wired to eligibility/advance rate, T3 confirm link, DCSA shipment adapter, on-chain attestation | FULL | 1, 3, 6 | Tiers price evidence; insurers care about tier, so it lands before insurance. Carrier sandbox attempted, labelled mock fallback. |
 | 9 | **Insured variant** — Allianz Trade sandbox / labelled mock, premium pass-through, claim = ledger evidence pack | FULL | 6, 8 | Carrier limit sits beside ours; a missed declaration window voids cover the way it does in reality. |
-| 10 | **Facility escrow contract** — drawdown gated on attested tier ≥ mandate | FULL | 5, 8 | Foundry enters. Proved by refusal: unattested can't draw, T1 can't satisfy a T2 mandate. On-chain balance == ledger balance. |
+| 10 | **The custody cycle: facility escrow + client-money segregation** — drawdown gated on attested tier ≥ mandate; the escrow generalized into demonstrable segregation of client money from platform funds, with the daily proof beside it | FULL | 5, 8 | *Scope extended 2026-09-07 (Chetan — the bankruptcy-remoteness challenge, paper Q18).* Foundry enters. Proved by refusal: unattested can't draw, T1 can't satisfy a T2 mandate. On-chain balance == ledger balance — now doing double duty as the segregation proof: the one custody structure a demo can actually run. |
 | 11 | **Multi-token + Visa adapter** — mock Open USD ERC-20, VSP adapter (designed-for, mock — no public API), comparison extends to the third rail | FULL | 1, 4 | Forces chain identity to be explicit per transaction; completes the headline. The mock must say it's a mock wherever it renders. |
 
 ## The droppable tail
@@ -34,6 +34,17 @@ the project still stands at cycle 8: three settlement modes, the priced
 comparison, both funding models, the full credit layer, and verification
 tiers. Cycles 6–8 are *not* droppable — credit, limits and verification were
 each an explicit scope decision (2026-09-05/06), chosen knowing their cost.
+
+## Standing design rule — client-money segregation (from cycle 2 onward)
+
+**Decided 2026-09-07 (Chetan's bankruptcy-remoteness challenge; paper §10
+Q18 carries the full analysis and costs).** From the fiat-rail cycle onward,
+client money — collections in transit, funder capital awaiting deployment —
+**never shares an account or a wallet with the platform's own funds** (fee
+income, operating balances). The chart of accounts and the wallet layout
+enforce the trust-account shape structurally; the account-level proof makes
+it visible; cycle 10 makes it contractual. The cycle-1 conduit treasury is
+the last cycle allowed to commingle, and only because its money is synthetic.
 
 ## Standing deferral — the UI and information architecture revisit
 

@@ -1,6 +1,6 @@
 # Trade Finance Rails — PRD
 
-**v0.4 · September 2026 · progressive by design**
+**v0.5 · September 2026 · progressive by design**
 
 > **Relationship to the programme paper.** `PRODUCT_PAPER.md` is the parent: the
 > argument, market, mechanics, risk framework and economics live there and are
@@ -132,10 +132,17 @@ acceptance lands in each cycle's `design.md`.
 | 7 limits & portfolio | — | ⬜ | ⬜ | ⬜ |
 | 8 invoice verification | — | ⬜ | ⬜ | ⬜ |
 | 9 insured variant | — | ⬜ | ⬜ | ⬜ |
-| 10 facility escrow | — | ⬜ | ⬜ | ⬜ |
+| 10 custody: escrow + segregation | — | ⬜ | ⬜ | ⬜ |
 | 11 multi-token + Visa | — | ⬜ | ⬜ | ⬜ |
 
 ## Change log
+
+- **v0.5** (2026-09-07) — custody made explicit at Chetan's challenge: paper
+  §10 gains Q18 (bankruptcy-remoteness — the demo deliberately isn't; the
+  staged real-world structures priced, humans included; paper → v10). Cycle
+  10 extended into the custody cycle (escrow + client-money segregation);
+  standing design rule from cycle 2: client money never shares an account or
+  wallet with platform funds (docs/product/CYCLES.md).
 
 - **v0.4** (2026-09-07) — overdue interest added at Chetan's direction during
   cycle 1's design: supplier rate +2% charged / funder rate +2% received on
