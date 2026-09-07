@@ -1,7 +1,7 @@
 # Trade Finance Rails — Programme Paper
 
 **Multi-rail settlement for receivables financing**
-Chetan Malhotra · September 2026 · v8 draft
+Chetan Malhotra · September 2026 · v9 draft
 
 > **What this document is.** A programme paper: the parent document for this
 > project. It carries the argument, the market, the mechanics, the risk framework
@@ -512,6 +512,11 @@ A part payment, once matched, pays down funder principal first; the supplier's
 residual absorbs the shortfall. Until matched, it sits in unapplied cash and
 the invoice does not advance.
 
+When repayment arrives late, overdue interest (§9) enters this waterfall as
+its own lines: the funder's portion rides with the payout, the platform's
+books to fee income, and the supplier's charge reduces the residual — visible
+lines in the ledger, never silent adjustments.
+
 ### Credit insurance — the insured variant
 
 Funders expect it, and §3 says why: many mandates cannot hold unrated SME-debtor
@@ -755,11 +760,19 @@ Whether that is cheap or dear is a per-market question this paper does not
 claim to answer; what matters is that the number is *shown*, which incumbent
 pricing rarely is.
 
-**What maturity passing does to the numbers.** Pricing is snapshotted, so no
-default interest accrues after the due date — every late day silently degrades
-the funder's realised return, and nobody is compensated for it. Real
-programmes charge late-payment interest; this design discloses the
-simplification instead of hiding it.
+**What maturity passing does to the numbers.** Late repayment accrues overdue
+interest on the principal, act/360, at elevated rates on both sides of the
+spread: the supplier's rate + 2% is charged, the funder's rate + 2% is
+received, and the platform keeps the difference — which equals the original
+spread applied to the overdue days, consistent with the grid model. Worked
+example: 8,000 principal at 8%/7%, ten days late → 22.22 charged, 20.00 to
+the funder, 2.22 to the platform. **Who bears the charge is a programme
+parameter:** in the current build it is deducted from the supplier's residual
+(recourse-style — the debtor always pays exactly the face value), with
+debtor-pays as the defined alternative. The charge caps at the residual: a
+supplier cannot owe more than they were due. *(This replaces the v5–v8
+disclosed simplification of an unremunerated overdue period — decided
+2026-09-07.)*
 
 ### Cost structure
 

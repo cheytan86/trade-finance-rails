@@ -1,6 +1,6 @@
 # Trade Finance Rails — PRD
 
-**v0.3 · September 2026 · progressive by design**
+**v0.4 · September 2026 · progressive by design**
 
 > **Relationship to the programme paper.** `PRODUCT_PAPER.md` is the parent: the
 > argument, market, mechanics, risk framework and economics live there and are
@@ -43,7 +43,10 @@ named) and reconciliation holds. Exact machine is cycle-1 design territory.
 Money legs (paper §5–§7): financing · disbursement · repayment · payout ·
 residual, plus the conversion legs 2a/3a in hybrid mode. Priority of payments:
 funder principal first, supplier residual absorbs shortfall. Premium and fees
-are pass-through lines, never margin.
+are pass-through lines, never margin. Late repayment accrues **overdue
+interest** (+2% on both sides of the spread, on principal, act/360; the
+platform keeps the difference; the bearer is a programme parameter —
+supplier-residual in cycle 1, debtor-pays defined for later).
 
 ## 3. The three modes
 
@@ -119,7 +122,7 @@ acceptance lands in each cycle's `design.md`.
 | Cycle | Slug | Discovery | Design | Shipped |
 |---|---|---|---|---|
 | 0 foundation | `foundation` | ✅ 2026-09-06 | ✅ 2026-09-06 | ⬜ |
-| 1 settlement seam + USDC | — | ⬜ | ⬜ | ⬜ |
+| 1 settlement seam + USDC | `settlement-usdc` | ✅ 2026-09-07 | ✅ 2026-09-07 | ⬜ |
 | 2 fiat rail (Circle) | — | ⬜ | ⬜ | ⬜ |
 | 3 reconciliation | — | ⬜ | ⬜ | ⬜ |
 | 4 priced comparison v1 | — | ⬜ | ⬜ | ⬜ |
@@ -133,6 +136,12 @@ acceptance lands in each cycle's `design.md`.
 | 11 multi-token + Visa | — | ⬜ | ⬜ | ⬜ |
 
 ## Change log
+
+- **v0.4** (2026-09-07) — overdue interest added at Chetan's direction during
+  cycle 1's design: supplier rate +2% charged / funder rate +2% received on
+  principal act/360, platform keeps the spread, borne by the supplier's
+  residual (bearer is a programme parameter). Supersedes the paper's v5–v8
+  "unremunerated overdue" simplification; paper → v9.
 
 - **v0.3** (2026-09-06) — per-buyer pricing made explicit (the predictability
   promise is per supplier × buyer × tenor band) and the limit hierarchy added
