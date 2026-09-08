@@ -42,6 +42,11 @@ switch · role isolation — growing to the five-leg USDC deal as legs land.
 ## Files created
 
 - `src/features/settlement-usdc/MANIFEST.md` — this file (rails)
+- `src/lib/rails/wallets.ts` + `wallets.test.ts` — the demo wallet registry:
+  actor → env-var NAME, key resolved at call time, missing/malformed keys
+  refused with named rules and no value echoed (A0)
+- `docs/demo-wallets-runbook.md` — addresses, faucet URLs, the faucet-scale
+  deal-size constraint, custody posture pointer to paper Q18 (A0)
 
 ## Files modified
 
@@ -51,5 +56,13 @@ switch · role isolation — growing to the five-leg USDC deal as legs land.
 ## Progress notes
 
 - 2026-09-07 · rails: design docs committed on feat/foundation (`757e909`,
-  pushed); branch cut; manifest + rules block. Last verified prompt: **00
-  (rails)**. Next: A0 (viem + demo wallets; then Chetan faucets ETH + USDC).
+  pushed); branch cut; manifest + rules block.
+- 2026-09-07 · custody scope (Chetan): paper v10 Q18, cycle 10 → custody
+  cycle, segregation rule from cycle 2 (`12d657c`).
+- 2026-09-07 · A0: viem 2.56.3 pinned (+package.json/lock — allow-listed);
+  wallet registry + tests; four keys generated into .env.local (never
+  echoed; git grep confirms zero key material in tree); .env.example slots;
+  runbook with addresses + faucet-scale constraint (USDC-rail deals sized
+  10–20 USDC; cents→6dp conversion at the rail boundary noted). 62 tests,
+  gates green. Last verified prompt: **A0**. Next: Chetan faucets ETH+USDC,
+  then A1 (schema 0001 — per-change re-approval).
