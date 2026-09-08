@@ -224,11 +224,17 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     expect((now.get(fees) ?? 0n) - (before.get(fees) ?? 0n)).toBe(79_600n);
   });
 
-  it("9 · a disbursed deal is terminal — both gates refuse", async () => {
+  it("9 · a disbursed deal refuses both money gates, each naming its rule", async () => {
+    // Since cycle 1, `disbursed` is no longer terminal (it awaits repayment)
+    // — but neither money gate may fire again, and each says why.
     asOps();
     const inv = await newestInvoice();
-    expect((await fundInvoice({}, form({ invoiceId: inv.id }))).error).toMatch(/terminal/i);
-    expect((await disburseInvoice({}, form({ invoiceId: inv.id }))).error).toMatch(/terminal/i);
+    expect((await fundInvoice({}, form({ invoiceId: inv.id }))).error).toMatch(
+      /only an approved invoice can be funded/,
+    );
+    expect((await disburseInvoice({}, form({ invoiceId: inv.id }))).error).toMatch(
+      /only a funded invoice can be disbursed/,
+    );
     expect(await eventCount(inv.id)).toBe(2);
   });
 

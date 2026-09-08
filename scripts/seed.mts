@@ -18,6 +18,7 @@ import {
   invoices,
   settlementEvents,
   ledgerEntries,
+  wallets,
 } from "../src/db/schema.ts";
 
 const url = process.env.DATABASE_URL;
@@ -34,6 +35,7 @@ await db.delete(ledgerEntries);
 await db.delete(settlementEvents);
 await db.delete(invoices);
 await db.delete(accounts);
+await db.delete(wallets);
 await db.delete(parties);
 
 const [platform] = await db
@@ -69,6 +71,10 @@ const chart = await db
     { kind: "supplier_payable", partyId: amber.id, currency: "USD" },
     { kind: "supplier_payable", partyId: ostrava.id, currency: "USD" },
     { kind: "fee_income", partyId: null, currency: "USD" },
+    // cycle 1: where each debtor's repayment comes from
+    { kind: "debtor_cash", partyId: meridian.id, currency: "USD" },
+    { kind: "debtor_cash", partyId: halvorsen.id, currency: "USD" },
+    { kind: "debtor_cash", partyId: coralline.id, currency: "USD" },
   ])
   .returning();
 const acct = (kind: string, partyId: string | null = null) => {
@@ -76,6 +82,34 @@ const acct = (kind: string, partyId: string | null = null) => {
   if (!a) throw new Error(`seed: missing account ${kind}`);
   return a.id;
 };
+
+// Demo wallets (cycle 1): party ↔ address ↔ the NAME of the env var holding
+// the key. Addresses are derived from .env.local at seed time; key material
+// never reaches the database. Chain 84532 = Base Sepolia.
+{
+  const { demoWalletAddress } = await import("../src/lib/rails/wallets.ts");
+  const BASE_SEPOLIA = 84532;
+  const map = [
+    { actor: "funder" as const, partyId: northgate.id, keyEnv: "WALLET_FUNDER_PK" },
+    { actor: "platform" as const, partyId: null, keyEnv: "WALLET_PLATFORM_PK" },
+    { actor: "supplier" as const, partyId: amber.id, keyEnv: "WALLET_SUPPLIER_PK" },
+    { actor: "debtor" as const, partyId: meridian.id, keyEnv: "WALLET_DEBTOR_PK" },
+  ];
+  const rows = [];
+  for (const m of map) {
+    try {
+      rows.push({
+        partyId: m.partyId,
+        address: demoWalletAddress(m.actor),
+        keyEnv: m.keyEnv,
+        chainId: BASE_SEPOLIA,
+      });
+    } catch {
+      console.warn(`  (skipping ${m.actor} wallet — ${m.keyEnv} not set; see docs/demo-wallets-runbook.md)`);
+    }
+  }
+  if (rows.length) await db.insert(wallets).values(rows);
+}
 
 // Backdrop invoices. Amounts are bigint minor units (cents).
 await db.insert(invoices).values([
@@ -225,7 +259,8 @@ console.log("Seeded:", {
   suppliers: [amber.name, ostrava.name],
   funder: northgate.name,
   debtors: [meridian.name, halvorsen.name, coralline.name],
-  accounts: 5,
-  invoices: "2 submitted · 1 approved · 1 refused · 1 funded · 1 disbursed",
+  accounts: 8,
+  invoices: "2 submitted · 1 approved · 1 refused · 1 funded · 1 disbursed (all demo-internal rail)",
   movements: "3 events, 7 entries, every event summing to zero — via lib/ledger",
+  wallets: "demo wallets mapped for Base Sepolia (addresses only; keys stay in .env.local)",
 });

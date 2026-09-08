@@ -8,6 +8,8 @@ export const INVOICE_STATUSES = [
   "refused",
   "funded",
   "disbursed",
+  "repaid",
+  "settled",
 ] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
@@ -16,7 +18,12 @@ const TRANSITIONS: Record<InvoiceStatus, readonly InvoiceStatus[]> = {
   approved: ["funded"],
   refused: [], // terminal — the correction path is a new submission
   funded: ["disbursed"],
-  disbursed: [], // terminal for cycle 0 — the spine's end
+  // cycle 1 — the deal's back half (design §3). `repaid` is entered by the
+  // debtor's VERIFIED payment, not by a click; `settled` when payout and
+  // residual have both booked, in either order.
+  disbursed: ["repaid"],
+  repaid: ["settled"],
+  settled: [], // terminal — the deal is finished
 };
 
 export class StateError extends Error {
@@ -42,6 +49,10 @@ export function assertTransition(from: InvoiceStatus, to: InvoiceStatus): void {
         ? `invoice is ${from}, and only an approved invoice can be funded`
         : to === "disbursed" && from !== "funded"
           ? `invoice is ${from}, and only a funded invoice can be disbursed`
-          : `${from} → ${to} is not a designed transition`;
+          : to === "repaid" && from !== "disbursed"
+            ? `invoice is ${from}, and only a disbursed invoice can be repaid`
+            : to === "settled" && from !== "repaid"
+              ? `invoice is ${from}, and a deal settles only after repayment`
+              : `${from} → ${to} is not a designed transition`;
   throw new StateError(`state-${from}-to-${to}`, why);
 }

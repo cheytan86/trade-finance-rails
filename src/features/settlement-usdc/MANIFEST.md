@@ -48,10 +48,31 @@ switch · role isolation — growing to the five-leg USDC deal as legs land.
 - `docs/demo-wallets-runbook.md` — addresses, faucet URLs, the faucet-scale
   deal-size constraint, custody posture pointer to paper Q18 (A0)
 
+- `drizzle/0001_swift_luckman.sql` (+ meta) — the approved data contract,
+  additive only; applied to Neon 2026-09-08 (A1)
+
 ## Files modified
 
 - `AGENTS.md` (root, branch-only) — foundation block replaced by this
   feature's block (each branch carries exactly its own) (rails)
+- `package.json` / lock — +viem 2.56.3 pinned (A0)
+- `.env.example` — four wallet key slot NAMES (A0)
+- `src/db/schema.ts` — rail column, `repaid`/`settled` statuses,
+  `repayment`/`payout`/`residual` event types, `debtor_cash` kind, `wallets`
+  table, tx-hash-once partial unique index (A1)
+- `src/lib/domain/states.ts` — 7-state machine; back-half refusals name
+  their own rules (A1, type surface must move with the schema)
+- `src/lib/domain/states.test.ts` — matrix re-pinned 5→7 states, 4→6
+  transitions; `settled` is now the terminal example (A1)
+- `src/lib/queries.ts` — MovementView.type follows the schema enum via
+  `$inferSelect` so future event types need no manual edit (A1)
+- `src/components/ui/status-pill.tsx` — repaid (ringed dot) / settled
+  (filled) treatments (A1)
+- `src/lib/deals/spine.integration.test.ts` — test 9 re-asserts the NEW rule
+  (disbursed is no longer terminal; both money gates still refuse, naming
+  their rules) (A1)
+- `scripts/seed.mts` — 3 debtor_cash accounts, wallet rows from .env.local
+  addresses (keys never stored) (A1)
 
 ## Progress notes
 
@@ -64,5 +85,16 @@ switch · role isolation — growing to the five-leg USDC deal as legs land.
   echoed; git grep confirms zero key material in tree); .env.example slots;
   runbook with addresses + faucet-scale constraint (USDC-rail deals sized
   10–20 USDC; cents→6dp conversion at the rail boundary noted). 62 tests,
-  gates green. Last verified prompt: **A0**. Next: Chetan faucets ETH+USDC,
-  then A1 (schema 0001 — per-change re-approval).
+  gates green. Last verified prompt: **A0**.
+- 2026-09-08 · wallets funded (Chetan) and verified on-chain: funder/debtor
+  20 USDC each, three senders 0.001 ETH; chain id 84532 confirmed.
+- 2026-09-08 · A1: migration 0001 generated + applied (all 6 existing deals
+  kept `demo-internal`); seed extended (8 accounts, 4 wallet rows —
+  addresses only). The schema's new enum values forced the domain type
+  surface to move with it: states 5→7 with the back half's refusal
+  messages, the pinned matrix 4→6 transitions, MovementView typed off
+  `$inferSelect`, StatusPill's two new treatments. Three cycle-0 tests
+  updated to assert the NEW rules (disbursed is no longer terminal) rather
+  than be loosened. 63 tests, gates green. Last verified prompt: **A1**.
+  Next: A2 (the rail seam — types, demo-internal impl, usdc impl, the
+  corrected verifier).

@@ -117,9 +117,12 @@ export async function invoiceDetail(id: string) {
   return row;
 }
 
+/** Follows the schema enum automatically — new event types never need a manual edit here. */
+type MovementType = (typeof settlementEvents.$inferSelect)["type"];
+
 export interface MovementView {
   eventId: string;
-  type: "funding" | "disbursement";
+  type: MovementType;
   evidenceKind: string;
   evidenceRef: string;
   createdAt: Date;

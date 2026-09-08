@@ -1,17 +1,20 @@
 import { describe, it, expect } from "vitest";
 import { INVOICE_STATUSES, canTransition, assertTransition, StateError } from "./states";
 
-// The full matrix, pinned: exactly these four transitions exist, and no other
-// pair is legal. 5 × 5 = 25 pairs; 4 allowed, 21 refused.
+// The full matrix, pinned: exactly these six transitions exist, and no other
+// pair is legal. 7 × 7 = 49 pairs; 6 allowed, 43 refused.
+// (Grew from 5 states / 4 transitions at cycle 1 — the deal's back half.)
 const ALLOWED = new Set([
   "submitted→approved",
   "submitted→refused",
   "approved→funded",
   "funded→disbursed",
+  "disbursed→repaid",
+  "repaid→settled",
 ]);
 
 describe("the designed transitions", () => {
-  it("allows exactly the four designed moves and nothing else", () => {
+  it("allows exactly the six designed moves and nothing else", () => {
     let allowed = 0;
     for (const from of INVOICE_STATUSES) {
       for (const to of INVOICE_STATUSES) {
@@ -20,7 +23,7 @@ describe("the designed transitions", () => {
         if (canTransition(from, to)) allowed++;
       }
     }
-    expect(allowed).toBe(4);
+    expect(allowed).toBe(6);
   });
 });
 
@@ -42,6 +45,21 @@ describe("refusals name their rule", () => {
   });
   it("terminal states say they are terminal", () => {
     expect(() => assertTransition("refused", "approved")).toThrowError(/terminal/);
-    expect(() => assertTransition("disbursed", "funded")).toThrowError(/terminal/);
+    // `settled` is the end of the line since cycle 1; `disbursed` no longer is.
+    expect(() => assertTransition("settled", "repaid")).toThrowError(/terminal/);
+  });
+
+  it("the back half's refusals name their own rules", () => {
+    expect(() => assertTransition("funded", "repaid")).toThrowError(
+      /only a disbursed invoice can be repaid/,
+    );
+    expect(() => assertTransition("disbursed", "settled")).toThrowError(
+      /settles only after repayment/,
+    );
+    // and a disbursed deal cannot be re-funded — the reason is the rule that
+    // binds, not terminality
+    expect(() => assertTransition("disbursed", "funded")).toThrowError(
+      /only an approved invoice can be funded/,
+    );
   });
 });

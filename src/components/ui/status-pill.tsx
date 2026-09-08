@@ -12,6 +12,11 @@ const STYLES: Record<InvoiceStatus, { pill: string; dot: string }> = {
     dot: "border-[1.5px] border-flight bg-transparent",
   },
   disbursed: { pill: "bg-good/10 text-good", dot: "bg-good" },
+  // cycle 1 — the back half. The progression intensifies toward the end:
+  // disbursed (tint, solid dot) → repaid (tint, ringed dot: money is back,
+  // the deal is not finished) → settled (filled: terminal, nothing pending).
+  repaid: { pill: "bg-good/10 text-good", dot: "border-2 border-good bg-card" },
+  settled: { pill: "bg-good text-white", dot: "bg-white" },
   refused: { pill: "bg-refuse/10 text-refuse", dot: "bg-refuse" },
 };
 
