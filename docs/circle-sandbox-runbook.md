@@ -42,67 +42,112 @@ rotated — get a new one from the console and replace it in `.env.local` only.
 > It is account-specific, it is not a secret, and `/v1/configuration` returns
 > it on demand (`STACK_RULES.md`).
 
-## Step 2 — register a test wire bank account
+## Step 2 — register a test wire bank account — DONE 2026-09-15
 
-The three outbound legs (disbursement, payout, residual) pay a bank account,
-and there is none registered. In the sandbox Circle publishes test bank
-details for exactly this.
-
-**Read the current shape from Circle's docs before posting** — the request
-body for `POST /v1/businessAccount/banks/wires` (account number vs IBAN,
-billing details, the test account numbers Circle designates) is Circle's to
-define and has changed across their API versions. Do not take it from memory,
-including mine.
-
-After it succeeds, re-run the read and record the returned bank id:
+The three outbound legs (disbursement, payout, residual) pay a bank account.
+Circle publishes sandbox test values for this: account `12340010`, routing
+`121000248`.
 
 ```bash
-curl -s https://api-sandbox.circle.com/v1/businessAccount/banks/wires \
+curl -s -X POST https://api-sandbox.circle.com/v1/businessAccount/banks/wires \
+  -H "Authorization: Bearer $CIRCLE_API_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "idempotencyKey": "<a fresh uuid>",
+    "accountNumber": "12340010",
+    "routingNumber": "121000248",
+    "billingDetails": { "name": "Trade Finance Rails (sandbox)", "city": "Boston",
+      "country": "US", "line1": "100 Money Street", "district": "MA",
+      "postalCode": "02108" },
+    "bankAddress": { "bankName": "SAN FRANCISCO", "city": "SAN FRANCISCO",
+      "country": "US", "line1": "100 Money Street", "district": "CA" }
+  }'
+```
+
+Result: **200**, and Circle resolves the routing number itself — the account
+comes back as `WELLS FARGO BANK, NA ****0010`, `status: pending`, and reaches
+`status: complete` within seconds. Re-read it with a plain GET on the same
+path.
+
+```text
+[x] Registered 2026-09-15 · trackingRef CIR2NV7EX2 · status complete
+```
+
+The bank id and trackingRef are account-specific identifiers, not secrets, and
+both are retrievable on demand — so, like the masterWalletId, they are not
+committed anywhere they would go stale. **The API key never leaves the
+environment.**
+
+## Step 3 — fund the sandbox balance — DONE 2026-09-15
+
+Payouts need a balance. In the sandbox you simulate an inbound wire.
+
+**THE TRAP, AND IT COSTS A 400 WITH NO MESSAGE.** `beneficiaryBank.accountNumber`
+is **Circle's receiving account**, not the account you registered in step 2.
+Sending `12340010` returns `{"code":-1,"message":"Something went wrong"}` at
+every amount, with nothing to indicate which field is wrong. Get the right
+number from the wire instructions first:
+
+```bash
+curl -s https://api-sandbox.circle.com/v1/businessAccount/banks/wires/<bank-id>/instructions \
   -H "Authorization: Bearer $CIRCLE_API_KEY"
 ```
 
-The bank id goes into the `settlement_destinations` table as an
-`external_id` — **the API key never does**.
+That returns Circle's own beneficiary bank — Standard Chartered, and an
+`accountNumber` (ours: `11001233428`). Use **that** one:
 
-## Step 3 — fund the sandbox balance
+```bash
+curl -s -X POST https://api-sandbox.circle.com/v1/mocks/payments/wire \
+  -H "Authorization: Bearer $CIRCLE_API_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "trackingRef": "CIR2NV7EX2",
+    "amount": { "amount": "50000.00", "currency": "USD" },
+    "beneficiaryBank": { "accountNumber": "11001233428" },
+    "memo": "trade-finance-rails cycle 2 sandbox funding"
+  }'
+```
 
-Payouts need a balance. In the sandbox this is done by simulating an inbound
-wire to the business account's deposit instructions, which is also **the
-capability question this cycle depends on** (see Step 4).
+Result: **201**, `status: pending`. Mock wires process in batches and take up
+to **15 minutes** to appear in the balance. Confirm with:
 
 ```bash
 curl -s https://api-sandbox.circle.com/v1/businessAccount/balances \
   -H "Authorization: Bearer $CIRCLE_API_KEY"
 ```
 
-Expect `available` to become non-empty. Until it does, every payout will fail
-for a reason that has nothing to do with our code.
-
-## Step 4 — THE CAPABILITY QUESTION, answered here and recorded
-
-**Two of the five legs are money coming *in*** — funding (the funder pays the
-platform) and repayment (the debtor pays the platform). They need the sandbox
-to simulate an **inbound wire**. Whether it can, and by which route, is the
-one thing cycle 2's design deliberately did not guess.
-
-Record the answer in `STACK_RULES.md` and in this file:
+`available` stays `[]` until the batch runs. To top up later, repeat the mock
+wire call — it is sandbox-only and cannot move real money.
 
 ```text
-[ ] Inbound wire simulation available?        yes / no
-[ ] Route used:                               ..............................
-[ ] Webhook fired on the simulated deposit?   yes / no
-[ ] Time from simulation to webhook:          ......
+[x] Funded 2026-09-15 · 50,000.00 USD requested · batch pending at time of writing
 ```
 
-**If yes:** all five legs run on the fiat rail and cycle 2 delivers a complete
-all-fiat mode.
+## Step 4 — THE CAPABILITY QUESTION — ANSWERED 2026-09-15: YES
 
-**If no:** stop and raise it with Chetan before A1 — it is a scope
-conversation, not an improvisation. The likely shape is that the three
-outbound legs run on the fiat rail and the two inbound ones stay on
-`demo-internal` for now, with the deal page saying so plainly. That is still a
-real asynchronous rail and still completes the cycle's actual subject, but it
-is **not** a complete all-fiat mode and must not be described as one.
+Two of the five legs are money coming **in** — funding (the funder pays the
+platform) and repayment (the debtor pays the platform). They need the sandbox
+to simulate an inbound wire, and cycle 2's design deliberately refused to
+guess whether it could.
+
+```text
+[x] Inbound wire simulation available?        YES
+[x] Route used:                               POST /v1/mocks/payments/wire
+[x] Beneficiary account:                      Circle's, from the wire
+                                              instructions — NOT the registered
+                                              account (see the trap above)
+[ ] Webhook fired on the simulated deposit?   answer at A5, when a subscription
+                                              and an endpoint exist
+[x] Time from simulation to balance:          batched, up to 15 minutes
+```
+
+**Consequence for the cycle: all five legs run on the fiat rail, and cycle 2
+delivers a complete all-fiat mode.** The fallback the design named — outbound
+legs on Circle, inbound stuck on demo-internal — is not needed.
+
+**And the 15-minute batch is a gift, not a cost.** The USDC rail confirms in
+seconds, so nothing in this product has ever really been asynchronous; the
+`--flight` treatment cycle 0 reserved has sat idle for two cycles. A deposit
+that takes a quarter of an hour exercises the in-flight strip, the pending
+row, the webhook and Check status the way real settlement would.
 
 ## Step 5 — the webhook subscription
 

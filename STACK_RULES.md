@@ -195,6 +195,30 @@ sandbox credential and cannot move real money.
   Read-only GETs only; nothing was written. `/v1/ping` returns 404 — it is not
   a route on this API, so do not use it as a health check.
 
+[AUDITED 2026-09-15, cycle 2 build step A0] The two gaps below are CLOSED, and
+the capability question cycle 2's design refused to guess is ANSWERED: YES.
+
+  POST /v1/businessAccount/banks/wires  → 200. Sandbox test values
+                                          12340010 / 121000248; Circle resolves
+                                          the bank itself (WELLS FARGO ****0010)
+                                          and the account reaches `complete`
+                                          within seconds.
+  POST /v1/mocks/payments/wire          → 201. INBOUND WIRE SIMULATION EXISTS,
+                                          so funding and repayment can run on
+                                          the fiat rail and cycle 2 delivers a
+                                          COMPLETE all-fiat mode.
+  Batched: up to 15 minutes from mock wire to a visible balance. That delay is
+  the first genuinely asynchronous settlement this product has had.
+
+  THE TRAP, written down because it returns a 400 with no message and no field
+  named: `beneficiaryBank.accountNumber` on the mock wire is CIRCLE'S receiving
+  account, read from GET .../banks/wires/<id>/instructions — NOT the account
+  you just registered. Passing the registered account fails at every amount.
+
+  Still unanswered, and correctly deferred to A5: whether a mock deposit fires
+  a webhook, and what signature scheme Circle uses. Both need an endpoint to
+  exist first.
+
 Two consequences for cycle 2, recorded now so they are not discovered late:
   - The sandbox returns 200 on every product surface. That is the sandbox being
     permissive, NOT proof the same products are enabled in production. Nothing
