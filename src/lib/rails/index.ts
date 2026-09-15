@@ -4,16 +4,14 @@
 
 import { demoInternalRail } from "./demo-internal.ts";
 import { usdcRail } from "./usdc.ts";
+import { circleFiatRail } from "./circle.ts";
 import { RailError, type RailId, type SettlementRail } from "./types.ts";
 
-// Partial, deliberately: `circle-fiat` exists as a RailId from migration 0005
-// (the enum values had to land together) but has no implementation until A4.
-// railFor's existing not-found guard is the honest answer in the meantime —
-// the concept is declared, the capability is not claimed, and the feature flag
-// keeps it unreachable from the UI either way.
+// One line per rail, as this file's header has promised since cycle 1.
 const RAILS: Partial<Record<RailId, SettlementRail>> = {
   "demo-internal": demoInternalRail,
   usdc: usdcRail,
+  "circle-fiat": circleFiatRail,
 };
 
 export function railFor(id: RailId): SettlementRail {
@@ -29,3 +27,5 @@ export const ALL_RAILS: SettlementRail[] = Object.values(RAILS);
 export * from "./types.ts";
 export { centsToTokenUnits, tokenUnitsToCents, USDC_ADDRESS } from "./usdc.ts";
 export { verifyUsdcTransfer, assertTestnet, BASE_SEPOLIA } from "./verify-usdc.ts";
+export { verifyCirclePayout, matchInboundDeposit } from "./verify-circle.ts";
+export { minorToDecimal, decimalToMinor } from "./circle-client.ts";

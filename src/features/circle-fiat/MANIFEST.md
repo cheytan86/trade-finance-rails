@@ -185,6 +185,36 @@ A3       The seam's three-outcome verify, and both existing rails conformed.
          rail branches — the cycle's central claim, checked not asserted.
          Untouchables clean: money, pricing, roles, wallets.ts, vercel.json.
 
+A4       The Circle rail, client and verifier — and it moved real sandbox money.
+         circle-client.ts (framework-free HTTP, key read at CALL time, refuses
+         any key without a SAND_ prefix), verify-circle.ts (the fiat sibling of
+         verify-usdc, held to the same refusal discipline), circle.ts (the rail).
+         Direction decides the mechanism and the two are NOT symmetric: outbound
+         legs are real sandbox payouts with an id we hold immediately; inbound
+         legs are mock wires, which means THE PLATFORM STANDS IN FOR THE
+         COUNTERPARTY'S BANK — as the demo wallets do on USDC — and the deposit
+         has no id until it arrives, so it is RECOGNISED by exact amount and
+         window rather than looked up.
+         LIVE PROOF (2026-09-15): three payouts created through the rail against
+         the real sandbox; two complete, one pending at time of writing;
+         balance 50,000.00 → 49,995.50. execute → verify ran end to end.
+         27 new tests. 158 total.
+
+FOUND LIVE, AND IT WAS NOT A FORMAT QUIBBLE — Circle 422s on a non-UUID
+         idempotencyKey, with no field named. Our key is `${legType}:${invoiceId}`
+         (the ledger's, deliberately). The fix is to HASH it, not regenerate it:
+         a retry must produce the SAME Circle key or Circle treats it as a new
+         instruction and creates a SECOND PAYOUT. A random UUID per attempt
+         would have satisfied the 422 and silently broken idempotency exactly
+         where it matters most. circleIdempotencyKey() + 3 tests, one of which
+         asserts stability rather than shape.
+
+ALLOW-LIST AMENDMENT 24 — src/lib/rails/seam.test.ts. Its rule that every rail
+         label must say "demo" or "testnet" CAUGHT THE NEW RAIL on first run,
+         which is the point of having it. Widened to include "sandbox": a Circle
+         sandbox is neither a demo nor a testnet and is equally not production.
+         The label was widened, not the rail renamed to something less accurate.
+
 SCHEMA AMENDMENT (approved 2026-09-15, Chetan) — pending_settlements.entries
          jsonb, migration 0006. The design's data contract did not name it.
          Reason: completeSettlement is called hours later by the webhook, and

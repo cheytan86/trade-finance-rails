@@ -24,6 +24,13 @@ export interface TransferRequest {
   idempotencyKey: string;
   from: RailActor;
   to: RailActor;
+  /** Rail-specific addressing for the counterparties, RESOLVED BY THE CALLER.
+   *  An off-chain rail pays a registered bank account, and that registry lives
+   *  in the database — which this module may not read (the seam is
+   *  framework-free). So the caller looks it up and passes it in. Absent for
+   *  rails that address their actors themselves, as USDC does from env. */
+  fromRef?: string;
+  toRef?: string;
   /** Minor units (cents) — the ledger's unit. The rail converts at its own
    *  boundary (USDC has 6dp; cents have 2). */
   amountMinor: bigint;

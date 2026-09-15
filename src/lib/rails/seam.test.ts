@@ -23,9 +23,13 @@ describe("the registry", () => {
     }
   });
 
-  it("every rail's label says demo or testnet — no rail may look production", () => {
+  it("every rail's label says demo, testnet or sandbox — no rail may look production", () => {
     for (const rail of ALL_RAILS) {
-      expect(rail.label.toLowerCase(), rail.id).toMatch(/demo|testnet/);
+      // cycle 2 widened this to include "sandbox": a Circle sandbox is neither
+      // a demo nor a testnet, and is equally not production. The guard caught
+      // the new rail on its first run, which is the point of having it — the
+      // label was widened, not the rail renamed to something less accurate.
+      expect(rail.label.toLowerCase(), rail.id).toMatch(/demo|testnet|sandbox/);
     }
   });
 });
