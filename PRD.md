@@ -1,6 +1,6 @@
 # Trade Finance Rails — PRD
 
-**v0.5 · September 2026 · progressive by design**
+**v0.6 · September 2026 · progressive by design**
 
 > **Relationship to the programme paper.** `PRODUCT_PAPER.md` is the parent: the
 > argument, market, mechanics, risk framework and economics live there and are
@@ -36,9 +36,20 @@ adapter, mock).
 
 ## 2. The deal and its legs
 
-States: `submitted → eligible → assessed → approved → funded → disbursed →
-(matured-unpaid?) → repaid → settled`, plus `refused` (with the failing rule
-named) and reconciliation holds. Exact machine is cycle-1 design territory.
+States, as built in cycle 1 — nine, with one two-way edge:
+
+```text
+submitted → approved → priced → funded → disbursed → repaid → settled
+    ↕ returned (ops returns with a note; the supplier corrects and resubmits)
+    → refused (terminal, the failing rule named)
+```
+
+The ops pipeline is three stages: **trade validation** (the invoice shown as
+a document; approve · return for corrections · reject) → **pricing** (the rate
+card and its full result; funding requires a priced deal) → **settlement**
+(the five money gates). Cycle 7's limit check slots in beside pricing.
+Overdue-ness is a display condition off the due date, not a state.
+Reconciliation holds and reversals arrive with cycle 3.
 
 Money legs (paper §5–§7): financing · disbursement · repayment · payout ·
 residual, plus the conversion legs 2a/3a in hybrid mode. Priority of payments:
@@ -136,6 +147,14 @@ acceptance lands in each cycle's `design.md`.
 | 11 multi-token + Visa | — | ⬜ | ⬜ | ⬜ |
 
 ## Change log
+
+- **v0.6** (2026-09-09) — cycle 1's built reality folded in: the nine-state
+  machine with `returned` and `priced`, and the three-stage ops pipeline
+  (trade validation → pricing → settlement). Three Develop-time scope
+  additions at Chetan's direction, each recorded in
+  `docs/product/settlement-usdc/design.md`: invoice document fields, the
+  pricing step with its three indicators, and trade validation's three
+  outcomes.
 
 - **v0.5** (2026-09-07) — custody made explicit at Chetan's challenge: paper
   §10 gains Q18 (bankruptcy-remoteness — the demo deliberately isn't; the

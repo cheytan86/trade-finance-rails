@@ -41,6 +41,22 @@ verification, so it is cheaper here than retrofitted):
 20. `src/lib/deals/actions.ts` — already on the list; validation for the new
     fields (issue date before due date; number unique per supplier)
 
+**Reconcile findings (Section D, 2026-09-15)** — `git diff --name-only
+feat/foundation` is the truth; the manifest explains it. Four entries the
+allow-list did not name, recorded rather than quietly absorbed:
+21. `src/components/ui/provenance-badge.tsx` — **a genuine unlisted
+    modification**, caught here. It gained an optional `href` so evidence
+    that can be checked independently renders as a link (solid cobalt)
+    rather than a label (dashed muted). Small, in the spirit of the
+    contract, and it should have been surfaced before it was made.
+22. `src/components/pay-invoice-form.tsx` — new; the design's contract
+    named "a client confirm component for /pay" in prose but not by name.
+23. `PRD.md`, `docs/product/CYCLES.md` — programme documents, updated at
+    Chetan's direction (custody scope 2026-09-07; the built state machine
+    and ops pipeline 2026-09-15). Not app code; recorded for completeness.
+24. `drizzle/0002–0004` + `drizzle/meta/*` + `package-lock.json` — migration
+    and lockfile artifacts implied by allow-list entries 1 and 17.
+
 **Untouchable:** applied migration `0000` · ledger sole-writer rule ·
 identity seam · no mainnet config · key material never in db/git/client ·
 `PRODUCT_PAPER.md` (amended only with Chetan's confirm — v9 done at design).

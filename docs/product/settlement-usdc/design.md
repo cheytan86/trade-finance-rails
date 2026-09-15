@@ -1,6 +1,9 @@
 # Design — Settlement seam + USDC rail (cycle 1)
 
 Date: 2026-09-07 · From: `docs/product/settlement-usdc/discovery.md`
+**Amended 2026-09-09** — three scope additions made during Develop at
+Chetan's direction, recorded here so the design describes what was actually
+built (see "Scope added during Develop" at the end).
 
 ## Step 1.0 — Existing-implementation verdict
 
@@ -261,6 +264,51 @@ no mainnet config anywhere · key material never in db, git, or client code.
 5. **Boundary:** an unverified movement cannot book — remove/timeout the
    receipt and the deal does not advance; and the overdue cap holds (a deal
    999 days late charges exactly the residual, never more).
+
+## Scope added during Develop (amendments, 2026-09-08/09)
+
+Three additions Chetan asked for while the build was running. Each was a
+decision taken knowingly with its cost; they are recorded here because a
+design that does not describe the built product is worse than no design.
+
+**1 · Invoice document fields** *(2026-09-08, allow-list amended)*. The submit
+form captured four facts; a financing decision needs the document. Added:
+invoice number (the reference cycle 3 reconciles payments against and cycle 8
+matches shipping documents to), issue date (bounds the due date, drives
+invoice age) and a description of goods. Migration 0002; `readInvoiceFields`
+is the single rule set, shared by submission and resubmission.
+
+**2 · The pricing step** *(2026-09-08)*. Approval and pricing were welded into
+one action, and seven of the ten figures the rate card produces were computed
+and never shown. Split into two ops stages with a new `priced` state between
+`approved` and `funded` (migration 0003) — **funding requires `priced`, so an
+unpriced deal cannot be funded by construction**. The pricing step renders the
+full breakdown plus three indicators Chetan chose: supplier all-in cost (and
+annualised), funder yield (annualised), platform margin (cash and bps of
+face). Indicators are display ratios in basis points computed from bigint
+amounts and **rounded once from the exact ratio** — annualising an
+already-rounded rate drifts a basis point. Re-pricing is allowed until funding
+locks the snapshot; the panel says which it is showing.
+
+**3 · Trade validation** *(2026-09-09)*. Ops was approving deals it could not
+see, with only yes/no available. The first ops stage now renders the invoice
+as a document (parties, number, value, issue and due dates, computed payment
+terms and invoice age, description) beside **three outcomes**: approve ·
+return for corrections · reject. New `returned` state (migration 0004) is the
+machine's only two-way edge: ops returns with a note, the supplier edits
+**every field** and resubmits, and the deal is re-validated from scratch.
+Return exists **only before approval** — a problem found later is a refusal or
+a reversal, so `approved` and `priced` stay a true record of what was decided.
+*Deliberately not built:* a verification checklist; evidence and assurance
+tiers are cycle 8's subject and a checklist here would promise more than it
+proves.
+
+**Consequences for the rest of this design.** The state machine is 9 states
+and 9 transitions, not 7/6: `submitted → approved | returned | refused`,
+`returned → submitted`, `approved → priced`, `priced → funded`, then the back
+half unchanged. The deal page is three numbered cards (1 · Trade validation ·
+2 · Pricing · 3 · Settlement) rather than a Terms card and a Gates card. The
+allow-list grew by three files, each recorded in the manifest with its reason.
 
 ## Build-readiness gate
 
