@@ -112,8 +112,14 @@ const acct = (kind: string, partyId: string | null = null) => {
 }
 
 // Backdrop invoices. Amounts are bigint minor units (cents).
+const issued = (daysAgo: number) =>
+  new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
+
 await db.insert(invoices).values([
   {
+    invoiceNumber: "AMB-2026-0041",
+    issueDate: issued(12),
+    description: "600 m organic cotton twill",
     supplierId: amber.id,
     debtorId: meridian.id,
     faceValueMinor: 54_000_00n,
@@ -121,6 +127,9 @@ await db.insert(invoices).values([
     status: "submitted",
   },
   {
+    invoiceNumber: "OST-2026-0088",
+    issueDate: issued(8),
+    description: "Precision bearings, batch 44",
     supplierId: ostrava.id,
     debtorId: coralline.id,
     faceValueMinor: 12_400_00n,
@@ -128,11 +137,30 @@ await db.insert(invoices).values([
     status: "submitted",
   },
   {
+    // Returned for correction — trade validation's third outcome, seeded so
+    // the state is visible without staging it by hand.
+    invoiceNumber: "AMB-2026-0044",
+    issueDate: issued(3),
+    description: "Bleached calico, 8 rolls",
+    supplierId: amber.id,
+    debtorId: coralline.id,
+    faceValueMinor: 7_600_00n,
+    dueDate: isoDaysFromNow(40),
+    status: "returned",
+    correctionNote:
+      "The description does not match the purchase order — please confirm the goods and reissue.",
+  },
+  {
+    invoiceNumber: "AMB-2026-0039",
+    issueDate: issued(20),
+    description: "Dyed linen, 3 pallets",
     supplierId: amber.id,
     debtorId: halvorsen.id,
     faceValueMinor: 18_200_00n,
     dueDate: isoDaysFromNow(60),
-    status: "approved",
+    // Priced, not merely approved: pricing is its own ops step, and this
+    // backdrop deal carries a rate card so it is ready to fund.
+    status: "priced",
     advanceRateBps: 8500,
     supplierRateBps: 950,
     funderRateBps: 800,
@@ -140,6 +168,9 @@ await db.insert(invoices).values([
     txnCostValue: 150_00n,
   },
   {
+    invoiceNumber: "OST-2026-0090",
+    issueDate: issued(5),
+    description: "CNC housings, order 7712",
     supplierId: ostrava.id,
     debtorId: meridian.id,
     faceValueMinor: 97_500_00n,
@@ -174,6 +205,9 @@ const ldb = getDb();
   const [inv] = await db
     .insert(invoices)
     .values({
+      invoiceNumber: "OST-2026-0075",
+      issueDate: issued(30),
+      description: "Hydraulic fittings, order 7690",
       supplierId: ostrava.id,
       debtorId: halvorsen.id,
       faceValueMinor: terms.faceValueMinor,
@@ -214,6 +248,9 @@ const ldb = getDb();
   const [inv] = await db
     .insert(invoices)
     .values({
+      invoiceNumber: "AMB-2026-0031",
+      issueDate: issued(55),
+      description: "Cotton poplin, 12 rolls",
       supplierId: amber.id,
       debtorId: meridian.id,
       faceValueMinor: terms.faceValueMinor,
@@ -260,7 +297,7 @@ console.log("Seeded:", {
   funder: northgate.name,
   debtors: [meridian.name, halvorsen.name, coralline.name],
   accounts: 8,
-  invoices: "2 submitted · 1 approved · 1 refused · 1 funded · 1 disbursed (all demo-internal rail)",
+  invoices: "2 submitted · 1 returned · 1 priced · 1 refused · 1 funded · 1 disbursed (all demo-internal rail)",
   movements: "3 events, 7 entries, every event summing to zero — via lib/ledger",
   wallets: "demo wallets mapped for Base Sepolia (addresses only; keys stay in .env.local)",
 });

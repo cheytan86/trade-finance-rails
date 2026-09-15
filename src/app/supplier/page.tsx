@@ -4,6 +4,8 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Amount } from "@/components/ui/amount";
 import { allSuppliers, allDebtors, invoicesForSupplier, resolvePartyForSeat } from "@/lib/queries";
 import { SubmitInvoiceForm } from "@/components/submit-invoice-form";
+import { ResubmitInvoiceForm } from "@/components/resubmit-invoice-form";
+import { formatMinor } from "@/lib/money";
 import { getIdentity } from "@/lib/roles/identity";
 import { seatGate } from "@/lib/roles/gate";
 import { actAsSupplier } from "@/lib/roles/actions";
@@ -26,6 +28,7 @@ export default async function SupplierPage() {
     return <p className="text-[13px] text-muted">No suppliers exist — run the seed script.</p>;
   }
   const rows = await invoicesForSupplier(supplier.id);
+  const returned = rows.filter((r) => r.invoice.status === "returned");
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3">
@@ -55,6 +58,39 @@ export default async function SupplierPage() {
           render here.
         </span>
       </div>
+
+      {returned.length > 0 ? (
+        <Card
+          title="Needs your attention"
+          sub="Platform ops returned these for correction — fix what they flagged and resubmit."
+        >
+          <div className="flex flex-col gap-4">
+            {returned.map(({ invoice, debtorName }) => (
+              <div key={invoice.id}>
+                <div className="mb-1.5 text-[13px]">
+                  <span className="font-medium">{invoice.invoiceNumber ?? "(no number)"}</span>{" "}
+                  <span className="text-muted">
+                    · {debtorName} · {formatMinor(invoice.faceValueMinor)} {invoice.currency}
+                  </span>
+                </div>
+                <ResubmitInvoiceForm
+                  invoiceId={invoice.id}
+                  note={invoice.correctionNote}
+                  debtors={debtors}
+                  current={{
+                    invoiceNumber: invoice.invoiceNumber ?? "",
+                    issueDate: invoice.issueDate ?? "",
+                    dueDate: invoice.dueDate,
+                    description: invoice.description ?? "",
+                    debtorId: invoice.debtorId,
+                    faceValue: (Number(invoice.faceValueMinor) / 100).toFixed(2),
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <Card
         title="New invoice"

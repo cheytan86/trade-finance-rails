@@ -32,6 +32,15 @@ confirm component for /pay · faucet runbook note.
 16. `.env.example` — wallet key slot NAMES only
 17. `package.json` / lock — +viem pinned (the design's one authorized dep)
 
+**Allow-list AMENDMENT, approved by Chetan 2026-09-08** (invoice document
+fields — the submit form captured only 4 facts; the invoice number is
+load-bearing for cycle 3's reconciliation matching and cycle 8's document
+verification, so it is cheaper here than retrofitted):
+18. `src/components/submit-invoice-form.tsx` — number, issue date, description
+19. `src/app/supplier/page.tsx` — pass the new fields through
+20. `src/lib/deals/actions.ts` — already on the list; validation for the new
+    fields (issue date before due date; number unique per supplier)
+
 **Untouchable:** applied migration `0000` · ledger sole-writer rule ·
 identity seam · no mainnet config · key material never in db/git/client ·
 `PRODUCT_PAPER.md` (amended only with Chetan's confirm — v9 done at design).
@@ -50,6 +59,33 @@ switch · role isolation — growing to the five-leg USDC deal as legs land.
 
 - `drizzle/0001_swift_luckman.sql` (+ meta) — the approved data contract,
   additive only; applied to Neon 2026-09-08 (A1)
+- `src/lib/rails/types.ts` — THE SEAM: prepare · execute · verify · evidence;
+  framework-free, no Next/db/React imports (A2)
+- `src/lib/rails/demo-internal.ts` — cycle 0's behaviour as a rail; its
+  existence is the abstraction's proof (A2)
+- `src/lib/rails/verify-usdc.ts` + test — the corrected verifier: chain id
+  explicit per call and mainnet refused outright; ALL matching transfer logs
+  summed (not first-log-only); bigint throughout. 12 tests, fixtures encoded
+  with viem so the real decoder runs (A2)
+- `src/lib/rails/usdc.ts` — the Base Sepolia implementation: balance and gas
+  pre-checks with runbook-pointing messages, send, wait, re-derive; the
+  cents↔6dp conversion lives here alone (A2)
+- `src/lib/rails/index.ts` + `seam.test.ts` — the registry (adding a rail is
+  one line) and the seam's own tests, incl. "no rail may look production" (A2)
+
+- `src/lib/pricing/indicators.ts` + test — supplier all-in cost, funder yield,
+  platform margin; basis points from bigint amounts, one rounding, never a
+  float touching money (A6)
+- `src/components/pricing-form.tsx` — the rate card + rail, its own step (A6)
+- `src/components/pricing-results.tsx` — the full breakdown + the three
+  indicators; labels itself indicative-vs-locked (A6)
+- `drizzle/0003_puzzling_vanisher.sql` — the `priced` status (A6)
+
+- `src/components/trade-validation.tsx` — step 1: the invoice as a document
+  beside three outcomes (approve · return · reject) (A7)
+- `src/components/resubmit-invoice-form.tsx` — the supplier's correction form,
+  every field editable, pre-filled (A7)
+- `drizzle/0004_striped_snowbird.sql` — `returned` status + `correction_note` (A7)
 
 ## Files modified
 
@@ -96,5 +132,40 @@ switch · role isolation — growing to the five-leg USDC deal as legs land.
   `$inferSelect`, StatusPill's two new treatments. Three cycle-0 tests
   updated to assert the NEW rules (disbursed is no longer terminal) rather
   than be loosened. 63 tests, gates green. Last verified prompt: **A1**.
-  Next: A2 (the rail seam — types, demo-internal impl, usdc impl, the
-  corrected verifier).
+- 2026-09-08 · A2: the seam + both implementations + the corrected verifier.
+  84 tests (21 new), gates green. **Proved live on Base Sepolia**: 1.00 USDC
+  funder→platform, tx
+  `0xfbee46d87345b43acc8edd3fc81d12687aeaa2ad8c283088dcda910fb365c3b2`,
+  verified by re-derivation, and the same tx REFUSED against a wrong
+  expected amount. Rail modules use .ts-extension relative imports (the
+  node-script rule from cycle 0). Last verified prompt: **A2**.
+  Next: A3 (overdue math + the three new entry shapes).
+- 2026-09-08 · A3–A5: invoice document fields (migration 0002, allow-list
+  amended at Chetan's approval), overdue math to the cent, three new entry
+  shapes, rail wired into all five gates, screens (rail picker, Basescan
+  links, live /pay). **$2 deal settled through all five legs on Base
+  Sepolia.** Live testing found an RPC read-after-write lag refusing a
+  legitimate leg — the balance pre-check now retries.
+- 2026-09-08 · A6 (Chetan: pricing as its own step): `priced` state between
+  approval and funding (migration 0003); `approveWithTerms` split into
+  `approveInvoice` (decision only, idempotent on double-click) and
+  `priceInvoice` (rate card + rail, re-priceable until funding); state
+  matrix re-pinned 7→8 states, 6→7 transitions; assertTransition rewritten
+  from a nested ternary into a readable rule table. Pricing card shows the
+  full breakdown + three indicators, labelled indicative-vs-locked. Two real
+  bugs caught by tests: the funding CAS still guarded on `approved` (money
+  booked, status did not), and re-approval errored on an already-approved
+  deal. 114 tests, gates green. Last verified prompt: **A6**.
+- 2026-09-09 · A7 (Chetan: trade validation): ops was approving deals it
+  could not see, with only yes/no. The deal page is now three numbered
+  cards — 1 · Trade validation (invoice document: parties, number, dates,
+  computed payment terms and invoice age, value, description) → 2 · Pricing
+  → 3 · Settlement — and validation has three outcomes. New `returned`
+  state (migration 0004) is the machine's only two-way edge: ops returns
+  with a note, the supplier edits EVERY field and resubmits, and it is
+  re-validated from scratch (one `readInvoiceFields` rule set shared by
+  submit and resubmit, so a corrected invoice is checked exactly as
+  strictly as a fresh one). Return exists only before approval, so
+  `approved`/`priced` stay a true record. Matrix re-pinned 8→9 states, 7→9
+  transitions. 117 tests, gates green; every seat/state verified over HTTP.
+  Last verified prompt: **A7**.

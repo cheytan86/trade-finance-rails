@@ -32,11 +32,29 @@ export function SubmitInvoiceForm({
         </select>
       </label>
       <label className="flex flex-col gap-1.5 text-[13px]">
+        <span className="font-medium text-muted">Invoice number</span>
+        <input
+          name="invoiceNumber"
+          required
+          placeholder="INV-2026-0142"
+          className="rounded-lg border border-line bg-card px-3 py-2 font-mono text-[13px]"
+        />
+      </label>
+      <label className="flex flex-col gap-1.5 text-[13px]">
         <span className="font-medium text-muted">Face value (USD)</span>
         <input
           name="faceValue"
           required
           placeholder="48000.00"
+          className="rounded-lg border border-line bg-card px-3 py-2 font-mono text-[13px]"
+        />
+      </label>
+      <label className="flex flex-col gap-1.5 text-[13px]">
+        <span className="font-medium text-muted">Issue date</span>
+        <input
+          name="issueDate"
+          type="date"
+          required
           className="rounded-lg border border-line bg-card px-3 py-2 font-mono text-[13px]"
         />
       </label>
@@ -47,6 +65,15 @@ export function SubmitInvoiceForm({
           type="date"
           required
           className="rounded-lg border border-line bg-card px-3 py-2 font-mono text-[13px]"
+        />
+      </label>
+      <label className="flex flex-col gap-1.5 text-[13px] sm:col-span-2">
+        <span className="font-medium text-muted">Description of goods or services</span>
+        <input
+          name="description"
+          required
+          placeholder="600 m organic cotton twill, delivered 2026-08-30"
+          className="rounded-lg border border-line bg-card px-3 py-2 text-[13.5px]"
         />
       </label>
       <label className="flex flex-col gap-1.5 text-[13px]">

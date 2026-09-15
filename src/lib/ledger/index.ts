@@ -24,7 +24,8 @@ export interface EntryInput {
 
 export interface MovementInput {
   invoiceId: string;
-  type: "funding" | "disbursement";
+  /** Follows the schema enum — new leg types need no edit here. */
+  type: (typeof settlementEvents.$inferSelect)["type"];
   evidenceKind?: "demo-internal" | "tx-hash" | "circle-payment-id" | "statement-line";
   evidenceRef: string;
   idempotencyKey: string;

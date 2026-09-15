@@ -9,16 +9,21 @@ import { DealTimeline } from "@/components/deal-timeline";
 import { invoiceDetail, movementsForInvoice, accountRefsFor } from "@/lib/queries";
 import { parseSnapshot, computePricing } from "@/lib/pricing";
 import { seatGate } from "@/lib/roles/gate";
-import { ReviewForm } from "@/components/review-form";
+import { TradeValidation } from "@/components/trade-validation";
+import { PricingForm } from "@/components/pricing-form";
+import { PricingResults } from "@/components/pricing-results";
 import { ConfirmDialog, type DialogEntry } from "@/components/ui/confirm-dialog";
-import { fundInvoice, disburseInvoice } from "@/lib/deals/actions";
-import { fundingEntries, disbursementEntries } from "@/lib/deals/preview";
+import { fundInvoice, disburseInvoice, payoutFunder, payResidual } from "@/lib/deals/actions";
+import {
+  fundingEntries,
+  disbursementEntries,
+  payoutEntries,
+  residualEntries,
+} from "@/lib/deals/preview";
+import { computeOverdue, daysLateBetween } from "@/lib/pricing/overdue";
+import { formatMinor } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
-
-function fmtBps(bps: number | null): string {
-  return bps == null ? "—" : `${(bps / 100).toFixed(2)}%`;
-}
 
 export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">) {
   const { id } = await params; // Next 16: params is a Promise
@@ -54,8 +59,13 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
         }
       : null;
 
+  // The breakdown the pricing panel shows: the locked snapshot once funded,
+  // otherwise a live estimate whose tenor shrinks daily — the distinction is
+  // the point, so the panel labels which one it is rendering.
+  const livePricing = snapshot ?? (terms ? computePricing(terms, new Date()) : null);
+
   const fundingPreview =
-    invoice.status === "approved" && terms && refs.funderCash && refs.treasury
+    invoice.status === "priced" && terms && refs.funderCash && refs.treasury
       ? toDialog(
           fundingEntries(computePricing(terms, new Date()), {
             funderCash: refs.funderCash,
@@ -79,6 +89,86 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
         )
       : null;
 
+  // The back half. Overdue is computed from the repayment event's timestamp
+  // (the ledger's own record of when money arrived), so payout and residual
+  // always show the same numbers the actions will book.
+  const repaymentEvent = movements.find((m) => m.type === "repayment");
+  const overdue =
+    snapshot && invoice.supplierRateBps != null && invoice.funderRateBps != null
+      ? computeOverdue({
+          principalMinor: snapshot.principalMinor,
+          supplierRateBps: invoice.supplierRateBps,
+          funderRateBps: invoice.funderRateBps,
+          daysLate: daysLateBetween(invoice.dueDate, repaymentEvent?.createdAt ?? new Date()),
+          residualMinor: snapshot.supplierResidualMinor,
+        })
+      : null;
+
+  const paidTypes = new Set(movements.map((m) => m.type));
+  const payoutPreview =
+    invoice.status === "repaid" &&
+    !paidTypes.has("payout") &&
+    snapshot &&
+    overdue &&
+    refs.treasury &&
+    refs.funderCash &&
+    refs.feeIncome
+      ? toDialog(
+          payoutEntries(snapshot, overdue, {
+            treasury: refs.treasury,
+            funderCash: refs.funderCash,
+            feeIncome: refs.feeIncome,
+          }),
+        )
+      : null;
+
+  const residualPreview =
+    invoice.status === "repaid" &&
+    !paidTypes.has("residual") &&
+    snapshot &&
+    overdue &&
+    refs.treasury &&
+    refs.supplierPayable &&
+    refs.feeIncome
+      ? toDialog(
+          residualEntries(snapshot, overdue, {
+            treasury: refs.treasury,
+            supplierPayable: refs.supplierPayable,
+            feeIncome: refs.feeIncome,
+          }),
+        )
+      : null;
+
+  // The invoice as a document — what ops validates against. Tenor and age are
+  // computed here so the decision does not require mental arithmetic.
+  const daysBetween = (from: string, to: string) =>
+    Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const invoiceDocument = [
+    { label: "Supplier", value: supplierName },
+    { label: "Debtor", value: debtorName },
+    { label: "Invoice number", value: invoice.invoiceNumber ?? "—" },
+    { label: "Face value", value: `${formatMinor(invoice.faceValueMinor)} ${invoice.currency}` },
+    { label: "Issue date", value: invoice.issueDate ?? "—" },
+    { label: "Due date", value: invoice.dueDate },
+    {
+      label: "Payment terms",
+      value: invoice.issueDate
+        ? `${daysBetween(invoice.issueDate, invoice.dueDate)} days from issue`
+        : "—",
+    },
+    {
+      label: "Invoice age",
+      value: invoice.issueDate
+        ? `${daysBetween(invoice.issueDate, todayIso)} days`
+        : "—",
+    },
+    { label: "Description", value: invoice.description ?? "—", wide: true },
+  ];
+
+  // Overdue-in-progress: past due and not yet repaid.
+  const daysPastDue = repaymentEvent ? 0 : daysLateBetween(invoice.dueDate, new Date());
+
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -92,6 +182,42 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
         <div className="mt-3">
           <DealTimeline status={invoice.status} />
         </div>
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-muted">
+          {invoice.invoiceNumber ? (
+            <span>
+              Invoice <span className="font-mono text-ink">{invoice.invoiceNumber}</span>
+            </span>
+          ) : null}
+          {invoice.issueDate ? <span>issued {invoice.issueDate}</span> : null}
+          <span>due {invoice.dueDate}</span>
+          <span className="font-mono text-[11.5px]">
+            rail: {invoice.rail === "usdc" ? "USDC · Base Sepolia (testnet)" : "demo-internal"}
+          </span>
+          {invoice.description ? (
+            <span className="basis-full text-muted">{invoice.description}</span>
+          ) : null}
+        </div>
+
+        {daysPastDue > 0 && invoice.status === "disbursed" ? (
+          <p className="mt-3 rounded-lg border border-flight/40 bg-flight/5 px-3 py-2 text-[13px] text-flight">
+            {daysPastDue} {daysPastDue === 1 ? "day" : "days"} past due — overdue interest is
+            accruing at the supplier&apos;s rate + 2%, charged against their residual (the debtor
+            still owes exactly the face value).
+          </p>
+        ) : null}
+
+        {overdue && overdue.supplierChargeMinor > 0n ? (
+          <div className="mt-3 rounded-lg border border-line bg-surface px-3.5 py-2.5 text-[13px]">
+            <span className="font-semibold">
+              Repaid {overdue.daysLate} {overdue.daysLate === 1 ? "day" : "days"} late.
+            </span>{" "}
+            Overdue interest: supplier charged <Amount minor={overdue.supplierChargeMinor} /> ·
+            funder receives <Amount minor={overdue.funderShareMinor} /> · platform keeps{" "}
+            <Amount minor={overdue.platformShareMinor} />
+            {overdue.capped ? " (capped at the residual — a supplier never owes more than they were due)" : ""}.
+          </div>
+        ) : null}
+
         {invoice.status === "refused" && invoice.refusalReason ? (
           <p className="mt-3 rounded-lg border border-refuse/30 bg-refuse/5 px-3 py-2 text-[13px] text-refuse">
             Refused: {invoice.refusalReason}
@@ -99,99 +225,110 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      {/* 1 · TRADE VALIDATION — the decision made while looking at the
+          invoice, with three outcomes (Chetan 2026-09-09). */}
+      <Card
+        title="1 · Trade validation"
+        sub={
+          invoice.status === "submitted"
+            ? "Check the invoice, then approve, return it for corrections, or reject it."
+            : invoice.status === "returned"
+              ? "Returned to the supplier for correction — it re-enters validation when they resubmit."
+              : invoice.status === "refused"
+                ? "Rejected."
+                : "Validated."
+        }
+      >
+        {invoice.status === "submitted" ? (
+          <TradeValidation invoiceId={invoice.id} document={invoiceDocument} />
+        ) : (
+          <div className="flex flex-col gap-2">
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-[13.5px] sm:grid-cols-2">
+              {invoiceDocument.map((d) => (
+                <div
+                  key={d.label}
+                  className={`flex justify-between gap-4 border-b border-line/60 pb-1.5 ${d.wide ? "sm:col-span-2" : ""}`}
+                >
+                  <dt className="text-muted">{d.label}</dt>
+                  <dd className="text-right font-medium">{d.value}</dd>
+                </div>
+              ))}
+            </dl>
+            {invoice.status === "returned" && invoice.correctionNote ? (
+              <p className="mt-2 rounded-lg border border-flight/40 bg-flight/5 px-3 py-2 text-[13px] text-flight">
+                Awaiting the supplier: {invoice.correctionNote}
+              </p>
+            ) : null}
+          </div>
+        )}
+      </Card>
+
+      {/* THE PRICING STEP — its own stage between the credit decision and
+          funding (Chetan 2026-09-08). Cycle 7's limit check slots in here. */}
+      {invoice.status !== "submitted" && invoice.status !== "refused" ? (
         <Card
-          title="Terms"
+          title="2 · Pricing"
           sub={
             snapshot
-              ? "Locked as the pricing snapshot the moment funding booked."
-              : "Editable until funding — the snapshot locks then."
+              ? "Locked at funding — every later leg reads these numbers."
+              : invoice.status === "approved"
+                ? "Approved. Set the rate card to price this deal; funding unlocks once it is priced."
+                : "Priced. Re-price freely until funding locks the snapshot."
           }
         >
-          <Table>
-            <tbody>
-              <tr>
-                <Td>Advance rate</Td>
-                <Td right className="font-mono text-[13px]">{fmtBps(invoice.advanceRateBps)}</Td>
-              </tr>
-              <tr>
-                <Td>Supplier rate (act/360)</Td>
-                <Td right className="font-mono text-[13px]">{fmtBps(invoice.supplierRateBps)}</Td>
-              </tr>
-              <tr>
-                <Td>Funder rate (act/360)</Td>
-                <Td right className="font-mono text-[13px]">{fmtBps(invoice.funderRateBps)}</Td>
-              </tr>
-              <tr>
-                <Td>Transaction cost</Td>
-                <Td right className="font-mono text-[13px]">
-                  {invoice.txnCostType === "fixed" && invoice.txnCostValue != null ? (
-                    <Amount minor={invoice.txnCostValue} />
-                  ) : invoice.txnCostType === "percent" ? (
-                    `${fmtBps(Number(invoice.txnCostValue))} of principal`
-                  ) : (
-                    "—"
-                  )}
-                </Td>
-              </tr>
-              {snapshot ? (
-                <>
-                  <tr>
-                    <Td>Tenor at funding</Td>
-                    <Td right className="font-mono text-[13px]">{snapshot.tenorDays} days</Td>
-                  </tr>
-                  <tr>
-                    <Td>Principal</Td>
-                    <Td right><Amount minor={snapshot.principalMinor} /></Td>
-                  </tr>
-                  <tr>
-                    <Td>Supplier disbursement</Td>
-                    <Td right><Amount minor={snapshot.supplierDisbursementMinor} /></Td>
-                  </tr>
-                </>
-              ) : null}
-            </tbody>
-          </Table>
-          {invoice.status === "approved" && terms ? (
-            <div className="mt-4 border-t border-line pt-4">
-              <p className="mb-3 text-[12.5px] text-muted">
-                Editable until funding locks the snapshot (re-approval, same margin check):
-              </p>
-              <ReviewForm
+          {livePricing ? (
+            <PricingResults
+              breakdown={livePricing}
+              faceValueMinor={invoice.faceValueMinor}
+              locked={Boolean(snapshot)}
+            />
+          ) : (
+            <p className="text-[13px] text-muted">
+              No rate card yet — set one below and the full breakdown appears here.
+            </p>
+          )}
+
+          {invoice.status === "approved" || invoice.status === "priced" ? (
+            <div className="mt-5 border-t border-line pt-4">
+              <PricingForm
                 invoiceId={invoice.id}
-                allowRefuse={false}
-                submitLabel="Update terms"
-                initial={{
-                  advanceRate: (invoice.advanceRateBps! / 100).toFixed(2),
-                  supplierRate: (invoice.supplierRateBps! / 100).toFixed(2),
-                  funderRate: (invoice.funderRateBps! / 100).toFixed(2),
-                  txnCostType: invoice.txnCostType!,
-                  // /100 covers both: fixed is minor units (15000 → 150.00),
-                  // percent is bps (50 → 0.50) — same scale, different meaning.
-                  txnCostValue: (Number(invoice.txnCostValue) / 100).toFixed(2),
-                }}
+                submitLabel={invoice.status === "priced" ? "Re-price" : "Price this deal"}
+                initial={
+                  terms
+                    ? {
+                        advanceRate: (terms.advanceRateBps / 100).toFixed(2),
+                        supplierRate: (terms.supplierRateBps / 100).toFixed(2),
+                        funderRate: (terms.funderRateBps / 100).toFixed(2),
+                        txnCostType: terms.txnCostType,
+                        // /100 covers both: fixed is minor units (15000 →
+                        // 150.00), percent is bps (50 → 0.50).
+                        txnCostValue: (Number(terms.txnCostValue) / 100).toFixed(2),
+                        rail: invoice.rail,
+                      }
+                    : {}
+                }
               />
             </div>
           ) : null}
         </Card>
+      ) : null}
 
-        <Card title="Gates" sub="Each consequence sits behind its own confirm — decisions, never results.">
-          {invoice.status === "submitted" ? (
-            <ReviewForm invoiceId={invoice.id} />
+      <div className="grid grid-cols-1 gap-5">
+        <Card
+          title="3 · Settlement"
+          sub="Each consequence sits behind its own confirm — decisions, never results."
+        >
+          {invoice.status === "submitted" || invoice.status === "returned" ? (
+            <p className="text-[13px] text-muted">
+              Settlement opens once the deal is validated and priced.
+            </p>
           ) : (
             <div className="flex flex-col gap-3.5 text-[13.5px]">
-              <div className="flex items-center justify-between">
-                <span>Approve / Refuse</span>
-                <span className="text-[12px] font-semibold text-muted">
-                  {invoice.status === "refused" ? "refused" : "done"}
-                </span>
-              </div>
-
               <div className="flex items-center justify-between gap-3">
                 <span className={invoice.status !== "approved" ? "text-muted/70" : undefined}>
                   Fund — books the financing leg
                 </span>
-                {invoice.status === "approved" && fundingPreview ? (
+                {invoice.status === "priced" && fundingPreview ? (
                   <ConfirmDialog
                     trigger="Fund…"
                     title="Confirm funding"
@@ -207,7 +344,9 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
                     title={
                       invoice.status === "refused"
                         ? "This invoice was refused — refused is terminal."
-                        : "Already funded — funding books exactly once."
+                        : invoice.status === "approved"
+                          ? "Price this deal first — funding needs a rate card."
+                          : "Already funded — funding books exactly once."
                     }
                   >
                     Fund…
@@ -243,9 +382,54 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
                 )}
               </div>
 
+              <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+                <span className={invoice.status !== "repaid" ? "text-muted/70" : undefined}>
+                  Pay out funder — principal + return{overdue && overdue.funderShareMinor > 0n ? " + overdue" : ""}
+                </span>
+                {payoutPreview ? (
+                  <ConfirmDialog
+                    trigger="Pay out…"
+                    title="Confirm payout to the funder"
+                    description="The funder receives their principal and the return they were owed, plus their share of any overdue interest."
+                    entries={payoutPreview}
+                    invoiceId={invoice.id}
+                    action={payoutFunder}
+                    confirmLabel="Confirm — book payout"
+                  />
+                ) : (
+                  <Button disabled title={paidTypes.has("payout") ? "Already paid out." : "The funder is paid out after the debtor repays."}>
+                    Pay out…
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <span className={invoice.status !== "repaid" ? "text-muted/70" : undefined}>
+                  Pay residual — what remains{overdue && overdue.supplierChargeMinor > 0n ? ", less the overdue charge" : ""}
+                </span>
+                {residualPreview ? (
+                  <ConfirmDialog
+                    trigger="Pay residual…"
+                    title="Confirm the supplier's residual"
+                    description="What remains of the face value after the funder's principal — less the supplier's overdue charge, of which the platform keeps the spread."
+                    entries={residualPreview}
+                    invoiceId={invoice.id}
+                    action={payResidual}
+                    confirmLabel="Confirm — book residual"
+                  />
+                ) : (
+                  <Button disabled title={paidTypes.has("residual") ? "Already paid." : "The residual is paid after the debtor repays."}>
+                    Pay residual…
+                  </Button>
+                )}
+              </div>
+
               <p className="mt-1 text-[12px] text-muted">
                 Every figure in a confirmation is recomputed on the server at the moment of the
                 consequence — the browser posts the decision, never the amounts.
+                {invoice.rail === "usdc"
+                  ? " On this deal each gate also moves real testnet USDC and books only once the transfer is verified on-chain."
+                  : null}
               </p>
             </div>
           )}
@@ -284,9 +468,17 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
                     ))}
                   </Td>
                   <Td>
-                    <ProvenanceBadge>
-                      {m.evidenceKind} · {m.evidenceRef.split(":").pop()}
-                    </ProvenanceBadge>
+                    {m.evidenceKind === "tx-hash" ? (
+                      <ProvenanceBadge
+                        href={`https://sepolia.basescan.org/tx/${m.evidenceRef}`}
+                      >
+                        {m.evidenceRef.slice(0, 10)}…{m.evidenceRef.slice(-6)}
+                      </ProvenanceBadge>
+                    ) : (
+                      <ProvenanceBadge>
+                        {m.evidenceKind} · {m.evidenceRef.split(":").pop()}
+                      </ProvenanceBadge>
+                    )}
                   </Td>
                 </tr>
               ))}

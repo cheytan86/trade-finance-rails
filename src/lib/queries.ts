@@ -46,6 +46,12 @@ export async function accountRefsFor(supplierId: string) {
     treasury: pick("platform_treasury", null),
     supplierPayable: pick("supplier_payable", supplierId),
     feeIncome: pick("fee_income", null),
+    // Keyed by debtor: the /pay page resolves its own payer.
+    debtorCash: Object.fromEntries(
+      rows
+        .filter((r) => r.kind === "debtor_cash" && r.partyId)
+        .map((r) => [r.partyId!, { id: r.id, label: accountLabel(r.kind, r.partyName) }]),
+    ) as Record<string, { id: string; label: string }>,
   };
 }
 

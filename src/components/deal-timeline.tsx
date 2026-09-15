@@ -1,7 +1,15 @@
 import { cn } from "@/lib/cn";
 import type { InvoiceStatus } from "@/lib/domain/states";
 
-const SPINE: InvoiceStatus[] = ["submitted", "approved", "funded", "disbursed"];
+const SPINE: InvoiceStatus[] = [
+  "submitted",
+  "approved",
+  "priced",
+  "funded",
+  "disbursed",
+  "repaid",
+  "settled",
+];
 
 export function DealTimeline({ status }: { status: InvoiceStatus }) {
   if (status === "refused") {

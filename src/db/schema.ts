@@ -27,8 +27,16 @@ export const partyRole = pgEnum("party_role", [
 
 export const invoiceStatus = pgEnum("invoice_status", [
   "submitted",
+  // Returned for correction (Chetan 2026-09-09): trade validation's third
+  // outcome, and the only two-way edge in the machine — the supplier fixes
+  // the document and resubmits, and it is validated again from scratch.
+  "returned",
   "approved",
   "refused",
+  // Pricing is its own ops step (Chetan 2026-09-08): approval is the credit
+  // decision, pricing sets the rate card. Cycle 7's limit check slots in
+  // beside it. Funding requires `priced`, so an unpriced deal cannot fund.
+  "priced",
   "funded",
   "disbursed",
   // cycle 1: the deal's back half
@@ -92,10 +100,20 @@ export const invoices = pgTable("invoices", {
   faceValueMinor: bigint("face_value_minor", { mode: "bigint" }).notNull(),
   currency: text("currency").notNull().default("USD"),
   dueDate: date("due_date").notNull(),
+  // Document facts (added 2026-09-08). The number is the reference cycle 3
+  // reconciles payments against and cycle 8 matches documents to; the issue
+  // date drives invoice age and bounds the due date. Nullable so the six
+  // pre-existing backdrop deals stay valid without invention.
+  invoiceNumber: text("invoice_number"),
+  issueDate: date("issue_date"),
+  description: text("description"),
   status: invoiceStatus("status").notNull().default("submitted"),
   // Default keeps every pre-cycle-1 deal valid and unchanged.
   rail: settlementRail("rail").notNull().default("demo-internal"),
   refusalReason: text("refusal_reason"),
+  // What ops asked the supplier to fix. Distinct from a refusal: this deal is
+  // alive and waiting on the supplier, and the note is what they act on.
+  correctionNote: text("correction_note"),
   // Terms, set by ops at approval. Rates in basis points; txn cost value is
   // minor units when type=fixed, basis points when type=percent.
   advanceRateBps: integer("advance_rate_bps"),

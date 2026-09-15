@@ -41,8 +41,35 @@ const { getDb } = await import("@/db/client");
 const { invoices, parties, accounts, settlementEvents, ledgerEntries } = await import(
   "@/db/schema"
 );
-const { submitInvoice, approveWithTerms, refuseInvoice, fundInvoice, disburseInvoice } =
-  await import("./actions");
+const {
+  submitInvoice,
+  approveInvoice,
+  priceInvoice,
+  refuseInvoice,
+  returnForCorrection,
+  resubmitInvoice,
+  fundInvoice,
+  disburseInvoice,
+} = await import("./actions");
+
+/** Since 2026-09-08 approval and pricing are separate ops steps; most tests
+ *  want a priced deal, so this does both. */
+const approveAndPrice = async (invoiceId: string, over: Record<string, string> = {}) => {
+  const approved = await approveInvoice({}, form({ invoiceId }));
+  if (approved.error) return approved;
+  return priceInvoice(
+    {},
+    form({
+      invoiceId,
+      advanceRate: "85.00",
+      supplierRate: "9.50",
+      funderRate: "8.00",
+      txnCostType: "fixed",
+      txnCostValue: "150.00",
+      ...over,
+    }),
+  );
+};
 const { balances } = await import("@/lib/ledger");
 
 const form = (o: Record<string, string>) => {
@@ -58,6 +85,22 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
   const createdIds: string[] = [];
 
   const dueDate = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
+  const issueDate = new Date().toISOString().slice(0, 10);
+
+  // Since 2026-09-08 an invoice carries document facts (number, issue date,
+  // description). The helper supplies valid defaults so each test still
+  // asserts the ONE thing it is about.
+  let invSeq = 0;
+  const submitForm = (over: Record<string, string> = {}) =>
+    form({
+      debtorId,
+      faceValue: "48,000.00",
+      dueDate,
+      issueDate,
+      invoiceNumber: `TEST-${Date.now()}-${++invSeq}`,
+      description: "test consignment",
+      ...over,
+    });
 
   beforeAll(async () => {
     const [amber] = await db
@@ -104,10 +147,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
   it("1 · a supplier submits — the deal exists and is submitted", async () => {
     asSupplier();
     const before = await db.select().from(invoices);
-    const res = await submitInvoice(
-      {},
-      form({ debtorId, faceValue: "48,000.00", dueDate }),
-    );
+    const res = await submitInvoice({}, submitForm());
     expect(res.error).toBeUndefined();
     const after = await db.select().from(invoices);
     expect(after.length).toBe(before.length + 1);
@@ -120,7 +160,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
   it("2 · a face value with impossible precision is refused, and nothing is created", async () => {
     asSupplier();
     const before = await db.select().from(invoices);
-    const res = await submitInvoice({}, form({ debtorId, faceValue: "48000.005", dueDate }));
+    const res = await submitInvoice({}, submitForm({ faceValue: "48000.005" }));
     expect(res.error).toMatch(/decimal places/);
     const after = await db.select().from(invoices);
     expect(after.length).toBe(before.length);
@@ -133,10 +173,18 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     expect(res.error).toMatch(/Only platform ops/);
   });
 
-  it("4 · ops approves with terms — rates land as basis points", async () => {
+  it("4 · ops approves, then prices — two steps, rates land as basis points", async () => {
     asOps();
     const inv = await newestInvoice();
-    const res = await approveWithTerms(
+
+    // Approval alone carries no rates and does NOT unlock funding.
+    expect((await approveInvoice({}, form({ invoiceId: inv.id }))).error).toBeUndefined();
+    expect((await newestInvoice()).status).toBe("approved");
+    expect((await fundInvoice({}, form({ invoiceId: inv.id }))).error).toMatch(
+      /not yet priced/,
+    );
+
+    const res = await priceInvoice(
       {},
       form({
         invoiceId: inv.id,
@@ -149,7 +197,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     );
     expect(res.error).toBeUndefined();
     const after = await newestInvoice();
-    expect(after.status).toBe("approved");
+    expect(after.status).toBe("priced");
     expect(after.advanceRateBps).toBe(8500);
     expect(after.supplierRateBps).toBe(950);
     expect(after.txnCostValue).toBe(15_000n);
@@ -197,7 +245,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     const res = await fundInvoice({}, form({ invoiceId: inv.id }));
     expect(res.error).toBeTruthy();
     // The state machine refuses before the ledger is even asked.
-    expect(res.error).toMatch(/only an approved invoice can be funded|already recorded/i);
+    expect(res.error).toMatch(/only a priced deal can be funded|already recorded/i);
     expect(await eventCount(inv.id)).toBe(1);
   });
 
@@ -230,7 +278,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     asOps();
     const inv = await newestInvoice();
     expect((await fundInvoice({}, form({ invoiceId: inv.id }))).error).toMatch(
-      /only an approved invoice can be funded/,
+      /only a priced deal can be funded/,
     );
     expect((await disburseInvoice({}, form({ invoiceId: inv.id }))).error).toMatch(
       /only a funded invoice can be disbursed/,
@@ -240,7 +288,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
 
   it("10 · a refusal must name its reason, and refused is terminal", async () => {
     asSupplier();
-    await submitInvoice({}, form({ debtorId, faceValue: "9000.00", dueDate }));
+    await submitInvoice({}, submitForm({ faceValue: "9000.00" }));
     const all = await db.select().from(invoices).where(eq(invoices.supplierId, amberId));
     const fresh = all.find((r) => r.faceValueMinor === 900_000n && r.status === "submitted")!;
     createdIds.push(fresh.id);
@@ -260,17 +308,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     expect(after.refusalReason).toMatch(/demo-cap-01/);
 
     // terminal: it cannot be approved back to life
-    const back = await approveWithTerms(
-      {},
-      form({
-        invoiceId: fresh.id,
-        advanceRate: "85.00",
-        supplierRate: "9.50",
-        funderRate: "8.00",
-        txnCostType: "fixed",
-        txnCostValue: "150.00",
-      }),
-    );
+    const back = await approveInvoice({}, form({ invoiceId: fresh.id }));
     expect(back.error).toMatch(/terminal/i);
   });
 
@@ -278,9 +316,15 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     asSupplier();
     const before = await db.select().from(invoices);
     const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    // issue date well before the (past) due date, so the past-due rule is
+    // what trips rather than the issue-before-due rule
     const res = await submitInvoice(
       {},
-      form({ debtorId, faceValue: "5000.00", dueDate: yesterday }),
+      submitForm({
+        faceValue: "5000.00",
+        dueDate: yesterday,
+        issueDate: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10),
+      }),
     );
     expect(res.error).toMatch(/must be in the future/);
     expect((await db.select().from(invoices)).length).toBe(before.length);
@@ -288,7 +332,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
 
   it("10c · terms that would book a loss are refused, with the arithmetic named", async () => {
     asSupplier();
-    await submitInvoice({}, form({ debtorId, faceValue: "10000.00", dueDate }));
+    await submitInvoice({}, submitForm({ faceValue: "10000.00" }));
     const all = await db.select().from(invoices).where(eq(invoices.supplierId, amberId));
     const fresh = all.find((r) => r.faceValueMinor === 1_000_000n && r.status === "submitted")!;
     createdIds.push(fresh.id);
@@ -296,33 +340,24 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     asOps();
     // Funder earns 12%, supplier pays 5%, no fee: the platform would pay the
     // difference on every deal.
-    const bad = await approveWithTerms(
-      {},
-      form({
-        invoiceId: fresh.id,
-        advanceRate: "85.00",
-        supplierRate: "5.00",
-        funderRate: "12.00",
-        txnCostType: "fixed",
-        txnCostValue: "0.00",
-      }),
-    );
+    const bad = await approveAndPrice(fresh.id, {
+      supplierRate: "5.00",
+      funderRate: "12.00",
+      txnCostValue: "0.00",
+    });
     expect(bad.error).toMatch(/negative margin/);
+    // Approval succeeded; only the PRICING was refused — so the deal waits at
+    // `approved` with no rate card, which is the honest resting place.
     const [unchanged] = await db.select().from(invoices).where(eq(invoices.id, fresh.id));
-    expect(unchanged.status).toBe("submitted"); // refused terms change nothing
+    expect(unchanged.status).toBe("approved");
+    expect(unchanged.advanceRateBps).toBeNull();
 
     // The same deal with a fee that covers the gap is fine.
-    const ok = await approveWithTerms(
-      {},
-      form({
-        invoiceId: fresh.id,
-        advanceRate: "85.00",
-        supplierRate: "5.00",
-        funderRate: "12.00",
-        txnCostType: "fixed",
-        txnCostValue: "500.00",
-      }),
-    );
+    const ok = await approveAndPrice(fresh.id, {
+      supplierRate: "5.00",
+      funderRate: "12.00",
+      txnCostValue: "500.00",
+    });
     expect(ok.error).toBeUndefined();
   });
 
@@ -331,18 +366,74 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     const all = await db.select().from(invoices).where(eq(invoices.supplierId, amberId));
     const target = all.find((r) => createdIds.includes(r.id) && r.status === "submitted");
     if (!target) return; // nothing submitted left to test against
-    const res = await approveWithTerms(
+    const res = await approveAndPrice(target.id, { supplierRate: "950.00" });
+    expect(res.error).toMatch(/between 0% and 100%/);
+  });
+
+  it("15 · trade validation returns a deal, the supplier corrects it, ops approves", async () => {
+    // The full round trip of Chetan's third outcome (2026-09-09).
+    asSupplier();
+    await submitInvoice({}, submitForm({ faceValue: "3300.00" }));
+    const all = await db.select().from(invoices).where(eq(invoices.supplierId, amberId));
+    const inv = all.find((r) => r.faceValueMinor === 330_000n && r.status === "submitted")!;
+    createdIds.push(inv.id);
+
+    asOps();
+    // A return must say what to fix — the supplier acts on that note.
+    expect((await returnForCorrection({}, form({ invoiceId: inv.id, note: "no" }))).error).toMatch(
+      /Say what needs correcting/,
+    );
+
+    const note = "Due date looks wrong — please confirm the payment terms.";
+    expect(
+      (await returnForCorrection({}, form({ invoiceId: inv.id, note }))).error,
+    ).toBeUndefined();
+
+    const [returned] = await db.select().from(invoices).where(eq(invoices.id, inv.id));
+    expect(returned.status).toBe("returned");
+    expect(returned.correctionNote).toBe(note);
+
+    // A returned deal is out of ops's hands until it comes back.
+    expect((await approveInvoice({}, form({ invoiceId: inv.id }))).error).toMatch(
+      /returned to the supplier/,
+    );
+    expect((await priceInvoice({}, form({ invoiceId: inv.id, advanceRate: "85.00", supplierRate: "9.50", funderRate: "8.00", txnCostType: "fixed", txnCostValue: "150.00" }))).error).toMatch(
+      /returned to the supplier/,
+    );
+
+    // The supplier corrects EVERY field — and it is re-validated from scratch.
+    asSupplier();
+    const bad = await resubmitInvoice(
       {},
-      form({
-        invoiceId: target.id,
-        advanceRate: "85.00",
-        supplierRate: "950.00",
-        funderRate: "8.00",
-        txnCostType: "fixed",
-        txnCostValue: "150.00",
+      submitForm({
+        invoiceId: inv.id,
+        faceValue: "3400.00",
+        dueDate: new Date(Date.now() - 86_400_000).toISOString().slice(0, 10),
       }),
     );
-    expect(res.error).toMatch(/between 0% and 100%/);
+    expect(bad.error).toMatch(/must be in the future|issue date must fall before/i);
+
+    const fixed = await resubmitInvoice(
+      {},
+      submitForm({
+        invoiceId: inv.id,
+        invoiceNumber: `FIXED-${Date.now()}`,
+        faceValue: "3400.00",
+        description: "corrected consignment",
+      }),
+    );
+    expect(fixed.error).toBeUndefined();
+
+    const [back] = await db.select().from(invoices).where(eq(invoices.id, inv.id));
+    expect(back.status).toBe("submitted");
+    expect(back.correctionNote).toBeNull(); // the note is cleared with the fix
+    expect(back.faceValueMinor).toBe(340_000n); // the amount was editable
+    expect(back.description).toBe("corrected consignment");
+
+    // Back in the queue, it approves normally.
+    asOps();
+    expect((await approveInvoice({}, form({ invoiceId: inv.id }))).error).toBeUndefined();
+    expect((await newestByIdStatus(inv.id))).toBe("approved");
   });
 
   it("11 · the double-booking refusal is enforced by Postgres, not by the UI", async () => {
@@ -412,7 +503,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     const shown = await resolvePartyForSeat("supplier", currentIdentity.partyId);
 
     const before = await db.select().from(invoices);
-    const res = await submitInvoice({}, form({ debtorId, faceValue: "1234.00", dueDate }));
+    const res = await submitInvoice({}, submitForm({ faceValue: "1234.00" }));
     expect(res.error).toBeUndefined();
 
     const after = await db.select().from(invoices);
@@ -426,7 +517,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     // with different terms; the deal stays approved, the terms move, and the
     // margin check still applies to the new terms.
     asSupplier();
-    await submitInvoice({}, form({ debtorId, faceValue: "6000.00", dueDate }));
+    await submitInvoice({}, submitForm({ faceValue: "6000.00" }));
     const all = await db.select().from(invoices).where(eq(invoices.supplierId, amberId));
     const inv = all.find((r) => r.faceValueMinor === 600_000n && r.status === "submitted")!;
     createdIds.push(inv.id);
@@ -442,15 +533,17 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
         txnCostValue: "150.00",
         ...over,
       });
-    expect((await approveWithTerms({}, terms({}))).error).toBeUndefined();
-    expect((await approveWithTerms({}, terms({ advanceRate: "80.00" }))).error).toBeUndefined();
+    expect((await approveInvoice({}, form({ invoiceId: inv.id }))).error).toBeUndefined();
+    expect((await priceInvoice({}, terms({}))).error).toBeUndefined();
+    // Re-pricing a priced deal updates it in place — no transition needed.
+    expect((await priceInvoice({}, terms({ advanceRate: "80.00" }))).error).toBeUndefined();
 
     const [after] = await db.select().from(invoices).where(eq(invoices.id, inv.id));
-    expect(after.status).toBe("approved");
+    expect(after.status).toBe("priced");
     expect(after.advanceRateBps).toBe(8000);
 
-    // and the margin check bites on the re-approval too
-    const bad = await approveWithTerms(
+    // and the margin check bites on the re-price too
+    const bad = await priceInvoice(
       {},
       terms({ supplierRate: "1.00", funderRate: "12.00", txnCostValue: "0.00" }),
     );
@@ -461,7 +554,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     asOps();
     const all = await db.select().from(invoices).where(eq(invoices.supplierId, amberId));
     const funded = all.find((r) => createdIds.includes(r.id) && r.status === "disbursed")!;
-    const res = await approveWithTerms(
+    const res = await priceInvoice(
       {},
       form({
         invoiceId: funded.id,
@@ -472,7 +565,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
         txnCostValue: "150.00",
       }),
     );
-    expect(res.error).toMatch(/terminal|not a designed transition/i);
+    expect(res.error).toMatch(/only an approved deal can be priced|terminal/i);
   });
 
   it("14 · funding a deal whose terms went missing is refused, and books nothing", async () => {
@@ -481,23 +574,13 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     // exercised is a guess, so here it is exercised: approve a deal, strip its
     // terms in the database, and try to fund it.
     asSupplier();
-    await submitInvoice({}, form({ debtorId, faceValue: "7000.00", dueDate }));
+    await submitInvoice({}, submitForm({ faceValue: "7000.00" }));
     const all = await db.select().from(invoices).where(eq(invoices.supplierId, amberId));
     const target = all.find((r) => r.faceValueMinor === 700_000n && r.status === "submitted")!;
     createdIds.push(target.id);
 
     asOps();
-    await approveWithTerms(
-      {},
-      form({
-        invoiceId: target.id,
-        advanceRate: "85.00",
-        supplierRate: "9.50",
-        funderRate: "8.00",
-        txnCostType: "fixed",
-        txnCostValue: "150.00",
-      }),
-    );
+    await approveAndPrice(target.id);
     await db
       .update(invoices)
       .set({ advanceRateBps: null, supplierRateBps: null })
@@ -507,7 +590,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     expect(res.error).toMatch(/Terms are not set/);
     expect(await eventCount(target.id)).toBe(0);
     const [after] = await db.select().from(invoices).where(eq(invoices.id, target.id));
-    expect(after.status).toBe("approved"); // unmoved
+    expect(after.status).toBe("priced"); // unmoved
   });
 
   // ── helpers ───────────────────────────────────────────────────────────────
@@ -536,6 +619,11 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
           events.map((e) => e.id),
         ),
       );
+  }
+
+  async function newestByIdStatus(invoiceId: string) {
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    return row.status;
   }
 
   async function eventCount(invoiceId: string) {

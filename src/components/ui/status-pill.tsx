@@ -6,7 +6,16 @@ import type { InvoiceStatus } from "@/lib/domain/states";
 // money committed, deal not finished; disbursed is booked-solid green.
 const STYLES: Record<InvoiceStatus, { pill: string; dot: string }> = {
   submitted: { pill: "bg-surface text-muted", dot: "bg-muted/50" },
+  // Returned: alive, but the ball is in the supplier's court — the in-flight
+  // treatment, because something is pending outside the platform.
+  returned: {
+    pill: "border-[1.5px] border-dashed border-flight bg-transparent text-flight",
+    dot: "border-[1.5px] border-flight bg-transparent",
+  },
   approved: { pill: "bg-cobalt/10 text-cobalt", dot: "bg-cobalt" },
+  // Priced: the decision is made and the rate card set — a step further than
+  // approved, not yet money moving.
+  priced: { pill: "bg-cobalt/10 text-cobalt", dot: "border-2 border-cobalt bg-card" },
   funded: {
     pill: "border-[1.5px] border-dashed border-flight bg-transparent text-flight",
     dot: "border-[1.5px] border-flight bg-transparent",
