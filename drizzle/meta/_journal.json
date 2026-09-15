@@ -43,6 +43,13 @@
       "when": 1789463635174,
       "tag": "0005_quiet_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789464254806,
+      "tag": "0006_pending_entries",
+      "breakpoints": true
     }
   ]
 }

@@ -13,10 +13,9 @@
 import { revalidatePath } from "next/cache";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
-import { invoices, accounts, parties, settlementEvents } from "@/db/schema";
+import { invoices, accounts, parties, settlementEvents, pendingSettlements } from "@/db/schema";
 import { assertTransition } from "@/lib/domain/states";
 import { computePricing, snapshotToJson, parseSnapshot } from "@/lib/pricing";
-import { bookMovement } from "@/lib/ledger";
 import { parseDecimalToMinor, MoneyError } from "@/lib/money";
 import {
   fundingEntries,
@@ -27,13 +26,18 @@ import {
 } from "./preview";
 import { getIdentity } from "@/lib/roles/identity";
 import { resolvePartyForSeat } from "@/lib/queries";
-import { railFor, type RailActor, type RailId } from "@/lib/rails";
+import { type RailActor, type RailId } from "@/lib/rails";
+import { settleLeg, completeSettlement, SettlementError } from "@/lib/settlement/pending";
 import { computeOverdue, daysLateBetween } from "@/lib/pricing/overdue";
 
 /**
  * Move money through the deal's rail, then book it — in that order, always.
  * The rail sends, the rail's own source of truth is consulted, and only a
  * VERIFIED transfer becomes ledger entries. A rail failure books nothing.
+ *
+ * Returns TRUE when the movement booked, FALSE when it is in flight. Since
+ * cycle 2 the intent is recorded BEFORE the money moves, so neither a crash
+ * nor a slow rail can leave a transfer with no trace (FIX 1).
  */
 async function settleThroughRail(
   db: Db,
@@ -47,26 +51,40 @@ async function settleThroughRail(
     entries: Array<{ accountId: string; amountMinor: bigint }>;
   },
 ) {
-  const rail = railFor(opts.railId);
-  const idempotencyKey = `${opts.type}:${opts.invoiceId}`;
-  const req = {
-    idempotencyKey,
+  const outcome = await settleLeg(db, {
+    railId: opts.railId,
+    invoiceId: opts.invoiceId,
+    type: opts.type,
     from: opts.from,
     to: opts.to,
     amountMinor: opts.amountMinor,
-  };
-
-  const receipt = await rail.execute(req);
-  const verified = await rail.verify(req, receipt);
-
-  await bookMovement(db, {
-    invoiceId: opts.invoiceId,
-    type: opts.type,
-    evidenceKind: verified.evidenceKind,
-    evidenceRef: verified.reference,
-    idempotencyKey,
     entries: opts.entries,
   });
+
+  if (outcome.status === "failed") {
+    // Nothing booked and nothing to reverse — the money never moved, or the
+    // rail says it never will. Surfaced as a refusal the operator can read.
+    throw new SettlementError("rail-failed", outcome.reason);
+  }
+  // `false` means IN FLIGHT: the rail has taken the instruction and has not
+  // confirmed it. The caller must not advance the deal — there is a durable
+  // pending row, and the webhook or Check status finishes it.
+  return outcome.status === "settled";
+}
+
+/**
+ * A leg is in flight. Nothing booked, the deal stays where it is, and the
+ * screens re-render to show the in-flight strip rather than an error — this
+ * is a normal outcome on a deferred rail, not a failure.
+ */
+function inFlight(invoiceId: string): ActionResult {
+  revalidatePath("/ops");
+  revalidatePath(`/ops/deals/${invoiceId}`);
+  revalidatePath("/ops/ledger");
+  revalidatePath("/supplier");
+  revalidatePath("/funder");
+  revalidatePath(`/pay/${invoiceId}`);
+  return {};
 }
 
 export interface ActionResult {
@@ -549,7 +567,7 @@ export async function fundInvoice(
       clientCollections: await accountId(db, "client_collections", null),
     });
 
-    await settleThroughRail(db, {
+    const settled = await settleThroughRail(db, {
       railId: inv.rail,
       invoiceId: id,
       type: "funding",
@@ -558,6 +576,7 @@ export async function fundInvoice(
       amountMinor: snapshot.principalMinor,
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
+    if (!settled) return inFlight(id);
 
     // CAS. Unreachable-in-practice failure (the idempotency key already
     // guards the booking), but an unguarded write is a habit, not a hole we
@@ -601,7 +620,7 @@ export async function disburseInvoice(
       platformOperating: await accountId(db, "platform_operating", null),
     });
 
-    await settleThroughRail(db, {
+    const settled = await settleThroughRail(db, {
       railId: inv.rail,
       invoiceId: id,
       type: "disbursement",
@@ -612,6 +631,7 @@ export async function disburseInvoice(
       amountMinor: snapshot.supplierDisbursementMinor,
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
+    if (!settled) return inFlight(id);
 
     const updated = await db
       .update(invoices)
@@ -651,7 +671,7 @@ export async function repayInvoice(
       clientCollections: await accountId(db, "client_collections", null),
     });
 
-    await settleThroughRail(db, {
+    const settled = await settleThroughRail(db, {
       railId: inv.rail,
       invoiceId: id,
       type: "repayment",
@@ -660,6 +680,7 @@ export async function repayInvoice(
       amountMinor: inv.faceValueMinor,
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
+    if (!settled) return inFlight(id);
 
     const updated = await db
       .update(invoices)
@@ -750,7 +771,7 @@ export async function payoutFunder(
       funderCash: await accountId(db, "funder_cash", funder.id),
     });
 
-    await settleThroughRail(db, {
+    const settled = await settleThroughRail(db, {
       railId: inv.rail,
       invoiceId: id,
       type: "payout",
@@ -760,6 +781,7 @@ export async function payoutFunder(
         snapshot.principalMinor + snapshot.funderInterestMinor + overdue.funderShareMinor,
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
+    if (!settled) return inFlight(id);
     await maybeSettle(db, id);
   } catch (err) {
     return { error: asMessage(err) };
@@ -791,7 +813,7 @@ export async function payResidual(
     });
 
     const toSupplier = snapshot.supplierResidualMinor - overdue.supplierChargeMinor;
-    await settleThroughRail(db, {
+    const settled = await settleThroughRail(db, {
       railId: inv.rail,
       invoiceId: id,
       type: "residual",
@@ -800,6 +822,7 @@ export async function payResidual(
       amountMinor: toSupplier,
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
+    if (!settled) return inFlight(id);
     await maybeSettle(db, id);
   } catch (err) {
     return { error: asMessage(err) };
@@ -830,4 +853,46 @@ function revalidateDeal(id: string) {
   revalidatePath("/ops/ledger");
   revalidatePath("/supplier");
   revalidatePath("/funder");
+}
+
+/**
+ * CHECK STATUS — the control cycle 1's error message has been promising since
+ * it was written. `usdc.ts:142` refuses an unconfirmed transfer with "Nothing
+ * has been booked — use Check status to verify it again", and no such control
+ * existed; cycle 1's deploy audit found the phrase appears exactly once in the
+ * repository, in that message.
+ *
+ * It exists now because the pending row gives it something to re-check
+ * against. It re-consults the rail's own record — it never re-sends — and goes
+ * through the same completeSettlement() the webhook uses, so a leg settled by
+ * a human pressing this and a leg settled by a callback are the same event.
+ */
+export async function checkSettlementStatus(
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const identity = await getIdentity();
+  if (!identity || identity.seat !== "ops") {
+    return { error: "Only the ops seat can check a settlement." };
+  }
+  const pendingId = String(formData.get("pendingId") ?? "");
+  if (!pendingId) return { error: "No settlement was named." };
+
+  const db = getDb();
+  try {
+    const outcome = await completeSettlement(db, pendingId);
+    if (outcome.status === "failed") {
+      return { error: `The rail reports this leg failed: ${outcome.reason}` };
+    }
+    // Settled or still in flight — both are honest answers, and the page
+    // re-renders to show which. Neither is an error.
+    const [row] = await db
+      .select({ invoiceId: pendingSettlements.invoiceId })
+      .from(pendingSettlements)
+      .where(eq(pendingSettlements.id, pendingId));
+    if (row) inFlight(row.invoiceId);
+    return {};
+  } catch (err) {
+    return { error: asMessage(err) };
+  }
 }

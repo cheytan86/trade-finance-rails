@@ -38,7 +38,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { getDb } = await import("@/db/client");
-const { invoices, parties, accounts, settlementEvents, ledgerEntries } = await import(
+const { invoices, parties, accounts, settlementEvents, ledgerEntries, pendingSettlements } =
+  await import(
   "@/db/schema"
 );
 const {
@@ -132,6 +133,12 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
       );
       await db.delete(settlementEvents).where(inArray(settlementEvents.invoiceId, createdIds));
     }
+    // cycle 2: in-flight rows reference the invoice, so they clear first.
+    // Their presence at teardown is itself evidence FIX 1 is live — every
+    // settled leg left a durable record of having been attempted.
+    await db
+      .delete(pendingSettlements)
+      .where(inArray(pendingSettlements.invoiceId, createdIds));
     await db.delete(invoices).where(inArray(invoices.id, createdIds));
   });
 

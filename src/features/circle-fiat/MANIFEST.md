@@ -148,6 +148,40 @@ A1 CLOSED — migration applied, database re-seeded, gate green.
          holds the margin alone (219.07); Σ of all entries = 0.
          GATE: tsc 0 · lint 0 · 117/117 tests · build ✓ 9 routes.
 
+A2       FIX 1 — the in-flight record and the single booking path.
+         src/lib/settlement/pending.ts: the intent row is written BEFORE
+         execute, never after, so "we sent money and lost the record" stops
+         being reachable. completeSettlement() is the ONE place money books —
+         the initiating request, the webhook and Check status all go through
+         it, so there is no second path to keep in agreement. It never trusts
+         what it is told: it re-reads the rail's own record every time, which
+         is also why out-of-order delivery cannot matter (no delivery's CLAIM
+         is ever used, only its arrival as a prompt to look).
+         settleThroughRail now returns settled/in-flight; all five money gates
+         guard on it and refuse to advance a deal whose money has not landed.
+         checkSettlementStatus added — the control usdc.ts:142 has promised
+         since cycle 1, buildable now that there is something to re-check.
+         10 new tests, against the real database, including the one that
+         matters: the pending row is observed to EXIST from inside execute(),
+         so "written first" is distinguished from "written last".
+         GATE: tsc 0 · lint 0 · 127/127 tests · build ✓.
+
+SCHEMA AMENDMENT (approved 2026-09-15, Chetan) — pending_settlements.entries
+         jsonb, migration 0006. The design's data contract did not name it.
+         Reason: completeSettlement is called hours later by the webhook, and
+         payout/residual entries depend on overdue interest measured from
+         `new Date()` — recomputing at completion could book numbers no human
+         ever saw. Freezing the approved entries keeps ConfirmDialog's
+         contract true across an asynchronous settlement: what was approved is
+         what books.
+
+ALLOW-LIST AMENDMENT 23 — vitest.config.mts. Cycle 2 adds a SECOND suite that
+         talks to the real Neon database, and there is one database. Vitest
+         runs files in parallel workers, so the spine's global-count
+         assertions were being moved under its feet ("expected 24 to be 23").
+         `fileParallelism: false` — the constraint is the shared database, not
+         the assertions. Costs ~4s on the suite.
+
 ALLOW-LIST AMENDMENT 22 — src/lib/deals/spine.integration.test.ts, same class
          as 21 and same cause: it resolved accounts by the retired kinds, so
          accountIdFor returned undefined. Updated to the new model, and case 8

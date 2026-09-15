@@ -290,6 +290,17 @@ export const pendingSettlements = pgTable(
     // The SAME `${type}:${invoiceId}` key the ledger already uses, so the two
     // guards agree by construction rather than by coincidence.
     idempotencyKey: text("idempotency_key").notNull(),
+    // THE ENTRIES OPS APPROVED, FROZEN (Chetan, 2026-09-15).
+    //
+    // On an immediate rail, "the server recomputes every figure at the
+    // consequence" and the gate's preview cannot drift from what books. On a
+    // deferred rail the consequence arrives hours later, and payout/residual
+    // entries depend on overdue interest measured from `new Date()` — so
+    // recomputing at webhook time could book numbers no human ever saw.
+    // Freezing them keeps ConfirmDialog's contract true across the wait: what
+    // was approved is what books. Amounts are strings because jsonb cannot
+    // hold bigint — the same pattern pricing_snapshot already uses.
+    entries: jsonb("entries").notNull(),
     failureReason: text("failure_reason"),
     initiatedAt: timestamp("initiated_at", { withTimezone: true })
       .notNull()

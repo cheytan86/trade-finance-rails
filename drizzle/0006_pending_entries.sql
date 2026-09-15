@@ -1,0 +1,1 @@
+ALTER TABLE "pending_settlements" ADD COLUMN "entries" jsonb NOT NULL;
