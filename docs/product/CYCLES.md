@@ -15,12 +15,12 @@ that was expected FULL. Cycle 0's ran 2026-09-06: FULL, four of five.
 |---|---|---|---|---|
 | 0 | **Foundation** — scaffold, migrations-from-commit-one, double-entry ledger core, role switch, deploy pipeline, the three copied modules | FULL *(confirmed)* | nothing | Nothing exists to protect yet — the one cycle with no allow-list (NEW mode). Everything later attaches to what it creates. |
 | 1 | **Settlement seam + USDC rail** | FULL | 0 | Proves the rail abstraction on the rail that already works; mode 3 (all-stablecoin) falls out. **The one to get right** — every later rail is an implementation behind this interface. |
-| 2 | **Fiat rail — Circle sandbox** | FULL | 1 | Async settlement, webhook signatures, idempotency, out-of-order delivery. First step: fund the sandbox balance and register a test bank account (recorded in STACK_RULES.md so it isn't a mid-cycle surprise). |
-| 3 | **Reconciliation ops** | FULL | 2 | The five exceptions incl. failed screening, reversals, exception aging. Modes 1 (all-fiat) and 2 (hybrid) complete here. |
+| 2 | **Fiat rail — Circle sandbox** | FULL | 1 | Async settlement, webhook signatures, idempotency, out-of-order delivery. First step: fund the sandbox balance and register a test bank account (recorded in STACK_RULES.md so it isn't a mid-cycle surprise). **Async-only — hybrid moved out 2026-09-15, see the programme note below.** |
+| 3 | **Reconciliation ops** | FULL | 2 | The five exceptions incl. failed screening, reversals, exception aging. **Mode 1 (all-fiat) completes here**; mode 2 (hybrid) now completes at cycle 6 with the programme. |
 | 4 | **Priced rail comparison v1** | likely LIGHT | 1–3 | **The headline, pulled forward** — one invoice, three rails, cost/speed/risk side by side. Needs only cycles 1–3, so the project's core claim exists by roughly week 7 even if everything after slips. Extends when the third rail lands (11). |
 | 4a | **Accounts mode** — real sign-in behind the `getIdentity()` seam, user↔party binding, onboarding; `AUTH_MODE` switch, second (login-gated) deployment | FULL | 0, 4 | *Added 2026-09-06 at Chetan's direction.* One codebase, two deployments — never two repos. Slotted after the headline so the job-search asset is never delayed by auth work. Adds ~3 weeks plus a both-modes test surcharge on every later cycle — accepted knowingly. |
 | 5 | **Funding models** — on-demand + committed facility, positions in the ledger | FULL | 1 | Undrawn carry displayed — instant funding costs the funder carry, and the product shows it rather than pretending it's free. |
-| 6 | **Credit assessment** — written policy, deterministic scorecard (every score cites its rule), rating, real registry lookup (never scored) | FULL | 1 | The KYC method applied to a third domain — the portfolio's thesis. Calibration disclaimed wherever scores render. |
+| 6 | **Credit assessment + the programme** — written policy, deterministic scorecard (every score cites its rule), rating, real registry lookup (never scored); **plus the programme itself**: the supplier × buyer RPA holding the grid (rate by rating band × tenor), the tier schedule, and the **settlement arrangement**. Pricing becomes **read-only** — the system applies the signed grid; ops overrules only with a recorded reason. Hybrid mode completes here. | FULL | 1, 2 | The KYC method applied to a third domain — the portfolio's thesis. Calibration disclaimed wherever scores render. *Scope extended 2026-09-15 — see the programme note below.* |
 | 7 | **Limits & portfolio** — supplier facility · supplier×buyer sub-limit + concentration rule · platform debtor limit; watchlist, DPD | FULL | 5, 6 | Limits enforce against ledger positions (5) using ratings (6). Refusal names which level binds and shows its arithmetic. |
 | 8 | **Invoice verification** — assurance tiers wired to eligibility/advance rate, T3 confirm link, DCSA shipment adapter, on-chain attestation | FULL | 1, 3, 6 | Tiers price evidence; insurers care about tier, so it lands before insurance. Carrier sandbox attempted, labelled mock fallback. |
 | 9 | **Insured variant** — Allianz Trade sandbox / labelled mock, premium pass-through, claim = ledger evidence pack | FULL | 6, 8 | Carrier limit sits beside ours; a missed declaration window voids cover the way it does in reality. |
@@ -34,6 +34,53 @@ the project still stands at cycle 8: three settlement modes, the priced
 comparison, both funding models, the full credit layer, and verification
 tiers. Cycles 6–8 are *not* droppable — credit, limits and verification were
 each an explicit scope decision (2026-09-05/06), chosen knowing their cost.
+
+## The programme — where pricing and the rail stop being per-deal choices
+
+**Decided 2026-09-15 (Chetan), from a question asked while reviewing cycle 2's
+screen mockups: "why does pricing have an option for settlement rail?"**
+
+The honest answer was that it shouldn't. Two findings came out of checking:
+
+1. **`src/lib/pricing/` never mentions `rail`** — not once. The rail sits on
+   the pricing form for *sequencing* reasons and affects **no number**. Ops
+   types the transaction cost by hand. So the product's one-line claim — the
+   settlement rail is an explicit, *priced* decision — was a claim the code
+   did not make.
+2. **`invoices.rail` is one column per deal**, but the paper's frame is per
+   *leg*, and hybrid mode (funder pays USDC, supplier receives fiat) is two
+   rails inside one deal. A single column cannot express it.
+
+**The resolution, and it is Chetan's idea rather than the paper's:** the
+**programme** — the supplier × buyer agreement, signed as an RPA — carries the
+head terms, and pricing *applies* them read-only. The paper already specifies
+the grid this way (§ "Programme pricing lives in the RPA… per invoice the
+system *applies* the signed grid, deterministically… one supplier selling to
+three buyers sees three rates"), and the deal flow already says ops "approves,
+or overrules with a recorded reason". What the paper does **not** yet say, and
+now will: **the settlement arrangement is a programme term too.**
+
+Consequences, all of which simplify rather than add:
+
+- **The rail stops being a per-deal choice**, which is also how it works
+  commercially — a supplier's RPA names the account they are paid into; nobody
+  selects a payment rail per invoice.
+- **Hybrid becomes a programme *type*, not a toggle.** "Funder settles in
+  USDC, supplier receives fiat" is a property of the agreement.
+- **Per-leg rails fall out for free** — the arrangement can name a rail per
+  leg with no per-deal UI and no per-deal schema.
+- **Cycle 4's comparison gets a sharper subject**: programmes a supplier could
+  be offered, rather than toggles an operator could flip.
+
+**Where it lands: cycle 6, renamed "Credit assessment + the programme".** A
+rating with no grid to feed is useless and a grid with no rating is arbitrary
+— they are one idea, and splitting them would build each against a stub.
+
+**What cycles 2–5 must therefore accept:** the rail picker on the pricing form
+is **scaffolding with a known end date**. It stays selectable until programmes
+exist, and `invoices.rail` remains the per-deal snapshot — the same pattern
+`pricingSnapshot` already uses. Cycle 6 makes it derived; nothing before
+cycle 6 should deepen the per-deal model.
 
 ## Standing design rule — client-money segregation (from cycle 2 onward)
 

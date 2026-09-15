@@ -1,7 +1,7 @@
 # Trade Finance Rails — Programme Paper
 
 **Multi-rail settlement for receivables financing**
-Chetan Malhotra · September 2026 · v10 draft
+Chetan Malhotra · September 2026 · v11 draft
 
 > **What this document is.** A programme paper: the parent document for this
 > project. It carries the argument, the market, the mechanics, the risk framework
@@ -410,6 +410,23 @@ programme finance actually works and what a supplier can plan around. In the
 on-demand model each deal is priced individually — off the same grid, because
 the same inputs must always price the same. A funder sees the tier, its
 attestations, and what each one rules out.
+
+**The settlement arrangement is a programme term too** *(added v11,
+2026-09-15)*. The RPA does not only fix the price — it fixes **how the money
+moves**: which rail settles which leg, and therefore into what kind of account
+the supplier is paid. This is how it works in practice; a supplier's
+receivables purchase agreement names their bank account, and nobody selects a
+payment rail per invoice. Three consequences follow, and each removes a
+mechanism rather than adding one. **Hybrid mode stops being a per-deal toggle
+and becomes a programme *type*** — "the funder settles in USDC, the supplier
+receives fiat" is a property of the agreement, not a choice at pricing time.
+**Per-leg rails need no per-deal machinery**, because the arrangement can name
+a rail per leg once. And the rail becomes genuinely *priced* rather than
+merely *chosen*: a programme's cost is the grid plus the settlement
+arrangement's own cost and speed, which is the comparison this paper's thesis
+has been arguing for throughout — one supplier, several programmes, priced
+side by side. Until that exists the rail is a per-deal field an operator sets,
+which is scaffolding and is labelled as such in the build plan.
 
 **Attested on-chain, honestly labelled.** At funding, the platform signs an
 attestation — invoice, evidence hash, tier, timestamp — recorded on-chain
