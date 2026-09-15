@@ -94,7 +94,8 @@ per day. (c) The demo wallets are platform-held and the demonstration is
 deliberately not bankruptcy-remote (paper §10 Q18). (d) Confirmation depth is
 one block — a demo posture, stated on screen. (e) Rates are illustrative;
 consistent arithmetic is not calibrated pricing. (f) The branch is unmerged
-and the live demo still shows cycle 0 until Deploy runs.
+and deployed only as a preview — production stays dark, and the release
+decision (merge, enable) has not been taken.
 
 **8. Evidence walkthrough.** A supplier submits an invoice with its document
 facts. Ops opens it and — for the first time — reads the invoice before
