@@ -5,8 +5,15 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
-import { parties, invoices, accounts, settlementEvents, ledgerEntries } from "@/db/schema";
-import { balances, balanceOf } from "@/lib/ledger";
+import {
+  parties,
+  invoices,
+  accounts,
+  settlementEvents,
+  ledgerEntries,
+  pendingSettlements,
+} from "@/db/schema";
+import { balances, balanceOf, isClientMoney } from "@/lib/ledger";
 
 const supplierParty = alias(parties, "supplier_party");
 const debtorParty = alias(parties, "debtor_party");
@@ -252,4 +259,49 @@ export async function latestPayableInvoiceId(): Promise<string | null> {
     .orderBy(desc(invoices.createdAt))
     .limit(1);
   return row?.id ?? null;
+}
+
+
+/**
+ * OPEN IN-FLIGHT LEGS — what the in-flight strip, the ops queue and the ledger
+ * panel all render. Deliberately a separate read from the ledger: these are
+ * movements that have NOT booked, and mixing them into a balance query is
+ * exactly the mistake the separate table exists to prevent.
+ */
+export async function openLegs(invoiceIds?: string[]) {
+  const db = getDb();
+  const rows = await db
+    .select({
+      leg: pendingSettlements,
+      invoiceNumber: invoices.invoiceNumber,
+      supplierName: parties.name,
+    })
+    .from(pendingSettlements)
+    .leftJoin(invoices, eq(pendingSettlements.invoiceId, invoices.id))
+    .leftJoin(parties, eq(invoices.supplierId, parties.id))
+    .orderBy(asc(pendingSettlements.initiatedAt));
+  return rows
+    .filter((r) => r.leg.status === "initiating" || r.leg.status === "initiated")
+    .filter((r) => !invoiceIds || invoiceIds.includes(r.leg.invoiceId));
+}
+
+/** Every leg for one deal, open or resolved — the deal page shows both. */
+export async function legsForInvoice(invoiceId: string) {
+  const db = getDb();
+  return db
+    .select()
+    .from(pendingSettlements)
+    .where(eq(pendingSettlements.invoiceId, invoiceId))
+    .orderBy(asc(pendingSettlements.initiatedAt));
+}
+
+/** Balances split into client money and the platform's own (cycle 2, FIX 2). */
+export async function chartByOwnership() {
+  const chart = await chartWithBalances();
+  return {
+    clientMoney: chart.filter((a) => isClientMoney(a.kind)),
+    // fee_income is retired and holds nothing, so an empty account is not
+    // rendered as a row that invites a question with no answer.
+    platformOwn: chart.filter((a) => !isClientMoney(a.kind) && a.balanceMinor !== 0n),
+  };
 }

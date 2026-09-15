@@ -3,13 +3,31 @@
 export function ProvenanceBadge({
   children,
   href,
+  trusted,
 }: {
   children: React.ReactNode;
   /** When the evidence is independently checkable (a tx on an explorer),
    *  the badge becomes a link — solid-bordered, because it is no longer a
    *  stand-in for proof: it IS the proof. */
   href?: string;
+  /** cycle 2 — THE THIRD TREATMENT, and it carries the product's argument.
+   *  A Circle payment id is neither of the other two: it is REAL evidence
+   *  that you cannot check yourself, because it lives in someone else's
+   *  database. Solid, so it does not read as a stand-in; unlinked, because
+   *  there is nowhere to send you. That difference is precisely the axis
+   *  cycle 4's priced rail comparison exists to compare. */
+  trusted?: boolean;
 }) {
+  if (trusted && !href) {
+    return (
+      <span
+        title="Real evidence, recorded by the rail — but only the rail can confirm it. There is nothing public to check."
+        className="inline-block rounded-md border border-line bg-surface px-2 py-px font-mono text-[11px] text-ink"
+      >
+        {children}
+      </span>
+    );
+  }
   if (href) {
     return (
       <a

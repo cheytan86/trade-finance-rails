@@ -118,8 +118,21 @@ curl -s https://api-sandbox.circle.com/v1/businessAccount/balances \
 wire call — it is sandbox-only and cannot move real money.
 
 ```text
-[x] Funded 2026-09-15 · 50,000.00 USD requested · batch pending at time of writing
+[x] Funded 2026-09-15 · 50,000.00 USD · landed in the balance in ~25 seconds,
+    not the 15 minutes the docs warn about
 ```
+
+**A MOCK WIRE HAS A $2.00 MINIMUM.** Found at A6 while proving the in-flight
+path with a $1.00 leg:
+
+```text
+400: Wire payment must be greater than the minimum amount of $2.00.
+```
+
+The equivalent of the USDC rail's faucet-scale constraint, and it bounds demo
+deal sizes on the inbound fiat legs the same way. Recorded here rather than
+rediscovered — and note that the refusal arrived cleanly through the rail, was
+written to the pending row with its reason, and booked nothing.
 
 ## Step 4 — THE CAPABILITY QUESTION — ANSWERED 2026-09-15: YES
 

@@ -24,10 +24,11 @@
 // `completeSettlement`, so there is exactly one place where money books.
 
 import { and, eq, sql } from "drizzle-orm";
-import { pendingSettlements } from "../../db/schema.ts";
+import { pendingSettlements, settlementDestinations } from "../../db/schema.ts";
 import type { Db } from "../../db/client.ts";
 import { bookMovement, LedgerError, type EntryInput } from "../ledger/index.ts";
 import { railFor } from "../rails/index.ts";
+import { invoices } from "../../db/schema.ts";
 import type { RailActor, RailId } from "../rails/types.ts";
 
 export class SettlementError extends Error {
@@ -145,10 +146,15 @@ export async function settleLeg(
 ): Promise<LegOutcome> {
   const pendingId = await openPending(db, spec);
   const rail = resolveRail(spec.railId);
+  const refs = await resolveRefs(db, spec.railId, spec.invoiceId, {
+    from: spec.from,
+    to: spec.to,
+  });
   const req = {
     idempotencyKey: idempotencyKeyFor(spec.type, spec.invoiceId),
     from: spec.from,
     to: spec.to,
+    ...refs,
     amountMinor: spec.amountMinor,
   };
 
@@ -210,19 +216,18 @@ export async function completeSettlement(
   }
 
   const rail = resolveRail(row.rail);
+  const actors = actorsFor(row.type);
+  const refs = await resolveRefs(db, row.rail, row.invoiceId, actors);
   const req = {
     idempotencyKey: row.idempotencyKey,
-    from: "platform" as RailActor, // re-derived below by the rail itself
-    to: "platform" as RailActor,
+    ...actors,
+    ...refs,
     amountMinor: row.amountMinor,
   };
 
   let outcome;
   try {
-    outcome = await rail.verify(
-      { ...req, ...actorsFor(row.type) },
-      { reference: row.railReference },
-    );
+    outcome = await rail.verify(req, { reference: row.railReference });
   } catch (err) {
     // A THROW IS A MISMATCH, not an outcome of the payment: the rail's record
     // contradicts what we expected (wrong amount, wrong recipient, wrong
@@ -265,6 +270,49 @@ export async function completeSettlement(
 
   await markSettled(db, pendingId);
   return { status: "settled", reference: verified.reference, eventId };
+}
+
+/**
+ * Rail addressing for the counterparties. The seam is framework-free and may
+ * not read the database, so the lookup happens HERE — in the one module both
+ * the initiating request and the webhook already go through, which is what
+ * keeps the two paths from drifting.
+ *
+ * `partyId` is null for the platform's own destination. A leg with no
+ * registered destination resolves to undefined, and the rail refuses at
+ * prepare() with a message naming the party — never at execute.
+ */
+async function resolveRefs(
+  db: Db,
+  rail: RailId,
+  invoiceId: string,
+  actors: { from: RailActor; to: RailActor },
+): Promise<{ fromRef?: string; toRef?: string }> {
+  const rows = await db
+    .select()
+    .from(settlementDestinations)
+    .where(eq(settlementDestinations.rail, rail));
+  if (rows.length === 0) return {};
+
+  const [inv] = await db
+    .select({ supplierId: invoices.supplierId, debtorId: invoices.debtorId })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+
+  const partyFor = (actor: RailActor): string | null => {
+    if (actor === "supplier") return inv?.supplierId ?? null;
+    if (actor === "debtor") return inv?.debtorId ?? null;
+    if (actor === "platform") return null;
+    return null; // funder: the single demo funder shares the platform's registry row
+  };
+  const pick = (actor: RailActor) => {
+    const partyId = partyFor(actor);
+    return (
+      rows.find((r) => r.partyId === partyId)?.externalId ??
+      rows.find((r) => r.partyId === null)?.externalId
+    );
+  };
+  return { fromRef: pick(actors.from), toRef: pick(actors.to) };
 }
 
 /** Which actors a leg moves between — the rail maps these to its own addressing. */

@@ -2,7 +2,13 @@ import { Card } from "@/components/ui/card";
 import { Table, Th, Td } from "@/components/ui/table";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Amount } from "@/components/ui/amount";
-import { allSuppliers, allDebtors, invoicesForSupplier, resolvePartyForSeat } from "@/lib/queries";
+import {
+  allSuppliers,
+  allDebtors,
+  invoicesForSupplier,
+  resolvePartyForSeat,
+  openLegs,
+} from "@/lib/queries";
 import { SubmitInvoiceForm } from "@/components/submit-invoice-form";
 import { ResubmitInvoiceForm } from "@/components/resubmit-invoice-form";
 import { formatMinor } from "@/lib/money";
@@ -28,6 +34,9 @@ export default async function SupplierPage() {
     return <p className="text-[13px] text-muted">No suppliers exist — run the seed script.</p>;
   }
   const rows = await invoicesForSupplier(supplier.id);
+  const inFlight = await openLegs();
+  const inFlightFor = (invoiceId: string) =>
+    inFlight.filter((l) => l.leg.invoiceId === invoiceId);
   const returned = rows.filter((r) => r.invoice.status === "returned");
   return (
     <div className="flex flex-col gap-5">
@@ -128,7 +137,20 @@ export default async function SupplierPage() {
                   </Td>
                   <Td className="font-mono text-[12.5px] text-muted">{invoice.dueDate}</Td>
                   <Td>
-                    <StatusPill status={invoice.status} />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StatusPill status={invoice.status} />
+                      {inFlightFor(invoice.id).map((l) => (
+                        // Money that has not arrived must never look like money
+                        // that has. It is labelled EXPECTED and is in no total.
+                        <span
+                          key={l.leg.id}
+                          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border-[1.5px] border-dashed border-flight px-2.5 py-0.5 text-xs font-semibold text-flight"
+                        >
+                          <i className="h-[5px] w-[5px] rounded-full border-[1.5px] border-flight" />
+                          {l.leg.type} in flight · {formatMinor(l.leg.amountMinor)} expected
+                        </span>
+                      ))}
+                    </div>
                   </Td>
                 </tr>
               ))}

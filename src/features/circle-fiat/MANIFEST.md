@@ -216,6 +216,35 @@ A5       The webhook route, signature verification, and the signed replay.
            all four recorded in webhook_deliveries, the refusals included
          17 signature tests. 175 total.
 
+A6       The screens. The in-flight strip (the cycle's one new pattern, and the
+         first real tenant for --flight, reserved in cycle 0 and idle since);
+         the Check-status button; the third provenance treatment — solid but
+         UNLINKED, because a Circle payment id is real evidence you cannot
+         check yourself, which is the axis cycle 4 will compare; the ledger's
+         In-flight panel above TWO SUBTOTALS (client money held / platform
+         funds); the queue marker; supplier and funder showing in-flight money
+         as EXPECTED, never received; the third rail option, flag-gated.
+         Also closed a gap A4 left: nothing resolved toRef, so a fiat payout
+         would have refused at prepare. resolveRefs() now does it in pending.ts
+         — the one module both the request and the webhook go through, which is
+         what keeps the two paths from drifting.
+         SEED BUG FOUND AND FIXED: the seed deleted invoices while
+         pending_settlements referenced them. Cycle 2's tables now clear first.
+         LIVE PROOF, the cycle's central claim:
+           a fiat leg initiated → pending
+           pending row: initiated, with its reference
+           BALANCES UNCHANGED — in-flight money is not money
+           re-check → pending again (honest, not an error)
+         Every surface renders 200: / /ops /ops/ledger /supplier /funder /pay.
+         The ledger shows both subtotals; fee_income renders NOWHERE, because
+         it is retired and holds nothing.
+
+FOUND LIVE AT A6 — a Circle mock wire has a $2.00 minimum. The equivalent of
+         the USDC rail's faucet-scale constraint. The refusal arrived cleanly
+         through the rail, was written to the pending row with Circle's own
+         reason, and booked nothing — the failure path working exactly as
+         designed, found by using it rather than by reading it.
+
 CORRECTED BY READING THE DOCS — there is NO shared webhook secret. Circle signs
          with an ASYMMETRIC key: `X-Circle-Signature` + `X-Circle-Key-Id`, and
          the public key is fetched from Circle by that id. CIRCLE_WEBHOOK_SECRET

@@ -3,9 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Table, Th, Td } from "@/components/ui/table";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Amount } from "@/components/ui/amount";
-import { funderPositions, resolvePartyForSeat } from "@/lib/queries";
+import { funderPositions, resolvePartyForSeat, openLegs } from "@/lib/queries";
 import { parseSnapshot } from "@/lib/pricing";
 import { seatGate } from "@/lib/roles/gate";
+import { formatMinor } from "@/lib/money";
 import { getIdentity } from "@/lib/roles/identity";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,9 @@ export default async function FunderPage() {
     return <p className="text-[13px] text-muted">No funder exists — run the seed script.</p>;
   }
   const { deals, cashBalance } = await funderPositions(funder.id);
+  const inFlight = await openLegs();
+  const inFlightFor = (invoiceId: string) =>
+    inFlight.filter((l) => l.leg.invoiceId === invoiceId);
 
   return (
     <div className="flex flex-col gap-5">
@@ -65,7 +69,18 @@ export default async function FunderPage() {
                     <Td right>{snap ? <Amount minor={snap.principalMinor} /> : "—"}</Td>
                     <Td className="font-mono text-[12.5px] text-muted">{invoice.dueDate}</Td>
                     <Td>
-                      <StatusPill status={invoice.status} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusPill status={invoice.status} />
+                        {inFlightFor(invoice.id).map((l) => (
+                          <span
+                            key={l.leg.id}
+                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border-[1.5px] border-dashed border-flight px-2.5 py-0.5 text-xs font-semibold text-flight"
+                          >
+                            <i className="h-[5px] w-[5px] rounded-full border-[1.5px] border-flight" />
+                            {l.leg.type} in flight · {formatMinor(l.leg.amountMinor)} expected
+                          </span>
+                        ))}
+                      </div>
                     </Td>
                   </tr>
                 );

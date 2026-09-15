@@ -77,11 +77,14 @@ export function PricingForm({
           >
             <option value="demo-internal">demo-internal (books instantly)</option>
             <option value="usdc">USDC on Base Sepolia (real testnet transfers)</option>
+            {process.env.NEXT_PUBLIC_ENABLE_CIRCLE_RAIL ? (
+              <option value="circle-fiat">Fiat · Circle sandbox (settles later)</option>
+            ) : null}
           </select>
         </label>
       </div>
       <p className="text-[12px] text-muted">
-        On the USDC rail every leg moves real testnet USDC between labelled demo wallets and books
+        On the fiat rail a leg is INITIATED now and confirmed by Circle later — usually minutes, and the deal does not advance until it confirms. On the USDC rail every leg moves real testnet USDC between labelled demo wallets and books
         only once verified on-chain. Faucet-scale: keep those deals small (≈2–20 USDC).
       </p>
       <div className="flex items-center gap-3">

@@ -109,6 +109,28 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
+/**
+ * CLIENT MONEY vs THE PLATFORM'S OWN — declared in code so the segregation can
+ * be asserted and displayed, not merely intended (cycle 2, FIX 2).
+ *
+ * The standing rule from this cycle onward: client money never shares an
+ * account with platform funds (docs/product/CYCLES.md). These two sets are
+ * disjoint and exhaustive over account_kind; `fee_income` is retired and holds
+ * no entries, but remains in the enum because Postgres cannot drop a value.
+ */
+export const CLIENT_MONEY_KINDS = [
+  "funder_cash",
+  "client_collections",
+  "supplier_payable",
+  "debtor_cash",
+] as const;
+
+export const PLATFORM_OWN_KINDS = ["platform_operating", "fee_income"] as const;
+
+export function isClientMoney(kind: string): boolean {
+  return (CLIENT_MONEY_KINDS as readonly string[]).includes(kind);
+}
+
 /** SUM(entries) for one account — the only definition of a balance. */
 export async function balanceOf(db: Db, accountId: string): Promise<bigint> {
   const [row] = await db

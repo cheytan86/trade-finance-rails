@@ -6,13 +6,19 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { ProvenanceBadge } from "@/components/ui/provenance-badge";
 import { Amount } from "@/components/ui/amount";
 import { DealTimeline } from "@/components/deal-timeline";
-import { invoiceDetail, movementsForInvoice, accountRefsFor } from "@/lib/queries";
+import {
+  invoiceDetail,
+  movementsForInvoice,
+  accountRefsFor,
+  legsForInvoice,
+} from "@/lib/queries";
 import { parseSnapshot, computePricing } from "@/lib/pricing";
 import { seatGate } from "@/lib/roles/gate";
 import { TradeValidation } from "@/components/trade-validation";
 import { PricingForm } from "@/components/pricing-form";
 import { PricingResults } from "@/components/pricing-results";
 import { ConfirmDialog, type DialogEntry } from "@/components/ui/confirm-dialog";
+import { InFlightStrip } from "@/components/in-flight-strip";
 import { fundInvoice, disburseInvoice, payoutFunder, payResidual } from "@/lib/deals/actions";
 import {
   fundingEntries,
@@ -35,6 +41,7 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
   const movements = await movementsForInvoice(id);
   const snapshot = invoice.pricingSnapshot ? parseSnapshot(invoice.pricingSnapshot) : null;
   const refs = await accountRefsFor(invoice.supplierId);
+  const legs = await legsForInvoice(id);
 
   // What the gate dialogs will show — same pure functions the actions book
   // with, so the confirmation cannot drift from the consequence. bigints are
@@ -324,6 +331,20 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
             </p>
           ) : (
             <div className="flex flex-col gap-3.5 text-[13.5px]">
+              {legs
+                .filter((l) => l.status === "initiating" || l.status === "initiated" || l.status === "failed")
+                .map((l) => (
+                  <InFlightStrip
+                    key={l.id}
+                    legLabel={l.type[0].toUpperCase() + l.type.slice(1)}
+                    amountMinor={l.amountMinor}
+                    reference={l.railReference}
+                    initiatedAt={l.initiatedAt}
+                    pendingId={l.id}
+                    failed={l.status === "failed"}
+                    failureReason={l.failureReason}
+                  />
+                ))}
               <div className="flex items-center justify-between gap-3">
                 <span className={invoice.status !== "approved" ? "text-muted/70" : undefined}>
                   Fund — books the financing leg

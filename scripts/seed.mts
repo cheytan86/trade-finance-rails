@@ -19,6 +19,9 @@ import {
   settlementEvents,
   ledgerEntries,
   wallets,
+  settlementDestinations,
+  pendingSettlements,
+  webhookDeliveries,
 } from "../src/db/schema.ts";
 
 const url = process.env.DATABASE_URL;
@@ -30,7 +33,12 @@ function isoDaysFromNow(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Wipe in FK order.
+// Wipe in FK order. Cycle 2 added three tables and two of them hang off
+// invoices, so they clear FIRST — webhook_deliveries references
+// pending_settlements, which references invoices.
+await db.delete(webhookDeliveries);
+await db.delete(pendingSettlements);
+await db.delete(settlementDestinations);
 await db.delete(ledgerEntries);
 await db.delete(settlementEvents);
 await db.delete(invoices);
@@ -293,6 +301,41 @@ const ldb = getDb();
   });
 }
 
+// ── the fiat rail's destination registry (cycle 2) ──────────────────────────
+// Read from Circle at seed time rather than hard-coded: the bank account id is
+// account-specific and would go stale in a committed file, exactly as the
+// masterWalletId would (STACK_RULES.md). Skipped cleanly when Circle is not
+// configured, so the seed still works on a fresh clone.
+let fiatDestinations = 0;
+const circleKey = process.env.CIRCLE_API_KEY;
+if (circleKey?.startsWith("SAND_")) {
+  try {
+    const circleBase = process.env.CIRCLE_API_BASE ?? "https://api-sandbox.circle.com";
+    const res = await fetch(`${circleBase}/v1/businessAccount/banks/wires`, {
+      headers: { Authorization: `Bearer ${circleKey}` },
+    });
+    const banks = ((await res.json()) as { data?: Array<{ id: string; status: string; description?: string }> })
+      .data ?? [];
+    const bank = banks.find((b) => b.status === "complete") ?? banks[0];
+    if (bank) {
+      await db.insert(settlementDestinations).values({
+        partyId: null, // the platform's own registered account
+        rail: "circle-fiat",
+        kind: "bank-account",
+        externalId: bank.id,
+        label: bank.description ?? "sandbox wire account",
+        // The demo's honest compromise, matching the USDC rail's: ONE
+        // registered sandbox account stands in for every counterparty, because
+        // Circle only lets us register accounts we actually control.
+        isClientMoney: true,
+      });
+      fiatDestinations = 1;
+    }
+  } catch {
+    // A seed must never fail because an external sandbox was unreachable.
+  }
+}
+
 console.log("Seeded:", {
   platform: platform.name,
   suppliers: [amber.name, ostrava.name],
@@ -301,5 +344,8 @@ console.log("Seeded:", {
   accounts: 8,
   invoices: "2 submitted · 1 returned · 1 priced · 1 refused · 1 funded · 1 disbursed (all demo-internal rail)",
   movements: "3 events, 7 entries, every event summing to zero — via lib/ledger",
+  fiatRail: fiatDestinations
+    ? "1 Circle wire account registered"
+    : "no destination — CIRCLE_API_KEY unset; the fiat rail refuses at prepare",
   wallets: "demo wallets mapped for Base Sepolia (addresses only; keys stay in .env.local)",
 });
