@@ -219,7 +219,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     asOps();
     const inv = await newestInvoice();
     const funderCash = await accountIdFor("funder_cash");
-    const treasury = await accountIdFor("platform_treasury");
+    const clientMoney = await accountIdFor("client_collections");
     const before = await balances(db);
 
     const res = await fundInvoice({}, form({ invoiceId: inv.id }));
@@ -233,10 +233,10 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     expect(entries).toHaveLength(2);
     expect(entries.reduce((s, e) => s + e.amountMinor, 0n)).toBe(0n);
 
-    // 85% of 48,000.00 = 40,800.00 moved from funder cash to treasury.
+    // 85% of 48,000.00 = 40,800.00 moved from funder cash into client money.
     const now = await balances(db);
     expect((now.get(funderCash) ?? 0n) - (before.get(funderCash) ?? 0n)).toBe(-4_080_000n);
-    expect((now.get(treasury) ?? 0n) - (before.get(treasury) ?? 0n)).toBe(4_080_000n);
+    expect((now.get(clientMoney) ?? 0n) - (before.get(clientMoney) ?? 0n)).toBe(4_080_000n);
   });
 
   it("7 · funding the same deal twice books exactly once", async () => {
@@ -249,11 +249,12 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     expect(await eventCount(inv.id)).toBe(1);
   });
 
-  it("8 · disbursement books three entries — supplier money and fees as separate lines", async () => {
+  it("8 · disbursement: supplier money and the platform's margin as separate lines", async () => {
     asOps();
     const inv = await newestInvoice();
     const payable = await accountIdFor("supplier_payable", amberId);
-    const fees = await accountIdFor("fee_income");
+    const platformOwn = await accountIdFor("platform_operating");
+    const clientMoney = await accountIdFor("client_collections");
     const before = await balances(db);
 
     const res = await disburseInvoice({}, form({ invoiceId: inv.id }));
@@ -267,9 +268,12 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     expect(all.reduce((s, e) => s + e.amountMinor, 0n)).toBe(0n);
 
     const now = await balances(db);
-    // disbursement 40,004.00 to the supplier; fees 796.00 (646.00 interest + 150.00 cost)
+    // 40,004.00 to the supplier. The platform takes ONLY its margin — 252.00 —
+    // and the funder's interest (544.00) stays in client money until payout,
+    // which is the cycle-2 segregation split asserted end to end.
     expect((now.get(payable) ?? 0n) - (before.get(payable) ?? 0n)).toBe(4_000_400n);
-    expect((now.get(fees) ?? 0n) - (before.get(fees) ?? 0n)).toBe(79_600n);
+    expect((now.get(platformOwn) ?? 0n) - (before.get(platformOwn) ?? 0n)).toBe(25_200n);
+    expect((now.get(clientMoney) ?? 0n) - (before.get(clientMoney) ?? 0n)).toBe(-4_025_600n);
   });
 
   it("9 · a disbursed deal refuses both money gates, each naming its rule", async () => {
@@ -443,11 +447,11 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     const { bookMovement, LedgerError } = await import("@/lib/ledger");
     const inv = await newestInvoice();
     const funderCash = await accountIdFor("funder_cash");
-    const treasury = await accountIdFor("platform_treasury");
+    const clientMoney = await accountIdFor("client_collections");
     const key = `test-race:${inv.id}`;
     const entries = [
       { accountId: funderCash, amountMinor: -1_000n },
-      { accountId: treasury, amountMinor: 1_000n },
+      { accountId: clientMoney, amountMinor: 1_000n },
     ];
     const movement = {
       invoiceId: inv.id,
@@ -484,7 +488,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
         idempotencyKey: `test-unbalanced:${inv.id}`,
         entries: [
           { accountId: await accountIdFor("funder_cash"), amountMinor: -1_000n },
-          { accountId: await accountIdFor("platform_treasury"), amountMinor: 999n },
+          { accountId: await accountIdFor("client_collections"), amountMinor: 999n },
         ],
       }),
     ).rejects.toThrowError(/sum to zero/);
@@ -595,7 +599,7 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
-  /** funder_cash and supplier_payable belong to a party; treasury and fees do not. */
+  /** funder_cash and supplier_payable belong to a party; client_collections and platform_operating do not. */
   async function accountIdFor(kind: string, partyId?: string) {
     const rows = await db.select().from(accounts);
     const row = rows.find((r) =>

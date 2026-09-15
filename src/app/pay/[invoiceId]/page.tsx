@@ -22,11 +22,11 @@ export default async function PayPage({ params }: PageProps<"/pay/[invoiceId]">)
   const refs = await accountRefsFor(invoice.supplierId);
   const debtorCash = refs.debtorCash?.[invoice.debtorId];
 
-  const payable = invoice.status === "disbursed" && debtorCash && refs.treasury;
+  const payable = invoice.status === "disbursed" && debtorCash && refs.clientCollections;
   const entries = payable
     ? repaymentEntries(invoice.faceValueMinor, {
         debtorCash: debtorCash!,
-        treasury: refs.treasury!,
+        clientCollections: refs.clientCollections!,
       }).map((e) => ({ label: e.label, amountMinor: e.amountMinor.toString() }))
     : [];
 

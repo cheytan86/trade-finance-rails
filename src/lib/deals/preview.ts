@@ -12,43 +12,54 @@ export interface EntryPreview {
   amountMinor: bigint;
 }
 
+// CYCLE 2 — the segregation split (Chetan, 2026-09-15). `treasury` is now
+// `clientCollections`: money held for others, never the platform's. The
+// platform's own funds live in `platformOperating`, and it receives ONLY the
+// platform's margin. `feeIncome` is gone from every shape — it used to hold
+// the margin AND the funder's interest in transit, which is precisely the
+// commingling the standing rule forbids from this cycle onward.
+
 export interface FundingAccounts {
   funderCash: { id: string; label: string };
-  treasury: { id: string; label: string };
+  clientCollections: { id: string; label: string };
 }
 
 export interface DisbursementAccounts {
-  treasury: { id: string; label: string };
+  clientCollections: { id: string; label: string };
   supplierPayable: { id: string; label: string };
-  feeIncome: { id: string; label: string };
+  platformOperating: { id: string; label: string };
 }
 
-/** Funding: the funder's cash becomes the platform's, at the locked principal. */
+/** Funding: the funder's cash becomes client money the platform holds, at the
+ *  locked principal. */
 export function fundingEntries(
   snapshot: PricingBreakdown,
   a: FundingAccounts,
 ): EntryPreview[] {
   return [
     { accountId: a.funderCash.id, label: a.funderCash.label, amountMinor: -snapshot.principalMinor },
-    { accountId: a.treasury.id, label: a.treasury.label, amountMinor: snapshot.principalMinor },
+    {
+      accountId: a.clientCollections.id,
+      label: a.clientCollections.label,
+      amountMinor: snapshot.principalMinor,
+    },
   ];
 }
 
 export interface RepaymentAccounts {
   debtorCash: { id: string; label: string };
-  treasury: { id: string; label: string };
+  clientCollections: { id: string; label: string };
 }
 
 export interface PayoutAccounts {
-  treasury: { id: string; label: string };
+  clientCollections: { id: string; label: string };
   funderCash: { id: string; label: string };
-  feeIncome: { id: string; label: string };
 }
 
 export interface ResidualAccounts {
-  treasury: { id: string; label: string };
+  clientCollections: { id: string; label: string };
   supplierPayable: { id: string; label: string };
-  feeIncome: { id: string; label: string };
+  platformOperating: { id: string; label: string };
 }
 
 /**
@@ -59,16 +70,24 @@ export interface ResidualAccounts {
 export function repaymentEntries(faceValueMinor: bigint, a: RepaymentAccounts): EntryPreview[] {
   return [
     { accountId: a.debtorCash.id, label: a.debtorCash.label, amountMinor: -faceValueMinor },
-    { accountId: a.treasury.id, label: a.treasury.label, amountMinor: faceValueMinor },
+    {
+      accountId: a.clientCollections.id,
+      label: a.clientCollections.label,
+      amountMinor: faceValueMinor,
+    },
   ];
 }
 
 /**
- * Payout: the funder gets their principal back plus the return they were
- * owed, plus their share of any overdue interest. The return was banked as
- * fee income at funding (the platform disbursed less than the funder paid
- * in), so it flows back OUT of fee income here — which is why fee_income
- * carries a negative line on an on-time deal.
+ * Payout: the funder gets their principal back plus the return they were owed,
+ * plus their share of any overdue interest — and ALL of it comes out of client
+ * money, in two entries.
+ *
+ * Cycle 1 needed three, because the funder's interest had been parked in
+ * fee_income at disbursement and had to flow back out of it here (which is why
+ * fee_income carried a negative line on an on-time deal). Under the cycle-2
+ * split the platform never took that money in the first place, so there is
+ * nothing to give back. The simpler shape IS the segregation.
  */
 export function payoutEntries(
   snapshot: PricingBreakdown,
@@ -79,14 +98,9 @@ export function payoutEntries(
     snapshot.principalMinor + snapshot.funderInterestMinor + overdue.funderShareMinor;
   return [
     {
-      accountId: a.treasury.id,
-      label: a.treasury.label,
-      amountMinor: -(snapshot.principalMinor + overdue.funderShareMinor),
-    },
-    {
-      accountId: a.feeIncome.id,
-      label: a.feeIncome.label,
-      amountMinor: -snapshot.funderInterestMinor,
+      accountId: a.clientCollections.id,
+      label: a.clientCollections.label,
+      amountMinor: -funderTotal,
     },
     { accountId: a.funderCash.id, label: a.funderCash.label, amountMinor: funderTotal },
   ];
@@ -106,16 +120,16 @@ export function residualEntries(
   const toSupplier = snapshot.supplierResidualMinor - overdue.supplierChargeMinor;
   const entries: EntryPreview[] = [
     {
-      accountId: a.treasury.id,
-      label: a.treasury.label,
+      accountId: a.clientCollections.id,
+      label: a.clientCollections.label,
       amountMinor: -(toSupplier + overdue.platformShareMinor),
     },
     { accountId: a.supplierPayable.id, label: a.supplierPayable.label, amountMinor: toSupplier },
   ];
   if (overdue.platformShareMinor !== 0n) {
     entries.push({
-      accountId: a.feeIncome.id,
-      label: a.feeIncome.label,
+      accountId: a.platformOperating.id,
+      label: a.platformOperating.label,
       amountMinor: overdue.platformShareMinor,
     });
   }
@@ -124,21 +138,39 @@ export function residualEntries(
 
 /**
  * Disbursement: three entries on purpose — the supplier's money and the
- * platform's fees leave the treasury as separate, visible lines. Fees are
+ * platform's margin leave client money as separate, visible lines. Fees are
  * lines, never margin (paper §7).
+ *
+ * CYCLE 2 — the platform takes ONLY its own margin. What the supplier paid in
+ * fees decomposes exactly:
+ *
+ *   fees = principal − disbursement = supplierInterest + txnCost
+ *        = platformMargin + funderInterest
+ *
+ * Cycle 1 moved the whole of `fees` into fee_income, so an account named for
+ * the platform held the funder's interest for the life of the deal. Here the
+ * funder's interest simply stays in client money until payout — it was never
+ * the platform's, and now the ledger says so.
  */
 export function disbursementEntries(
   snapshot: PricingBreakdown,
   a: DisbursementAccounts,
 ): EntryPreview[] {
-  const fees = snapshot.principalMinor - snapshot.supplierDisbursementMinor;
   return [
-    { accountId: a.treasury.id, label: a.treasury.label, amountMinor: -snapshot.principalMinor },
+    {
+      accountId: a.clientCollections.id,
+      label: a.clientCollections.label,
+      amountMinor: -(snapshot.supplierDisbursementMinor + snapshot.platformMarginMinor),
+    },
     {
       accountId: a.supplierPayable.id,
       label: a.supplierPayable.label,
       amountMinor: snapshot.supplierDisbursementMinor,
     },
-    { accountId: a.feeIncome.id, label: a.feeIncome.label, amountMinor: fees },
+    {
+      accountId: a.platformOperating.id,
+      label: a.platformOperating.label,
+      amountMinor: snapshot.platformMarginMinor,
+    },
   ];
 }

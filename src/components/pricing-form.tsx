@@ -16,7 +16,7 @@ export interface RateCard {
   funderRate?: string;
   txnCostType?: "fixed" | "percent";
   txnCostValue?: string;
-  rail?: "demo-internal" | "usdc";
+  rail?: "demo-internal" | "usdc" | "circle-fiat";
 }
 
 /** The pricing step's form: the rate card and the settlement rail. Separate

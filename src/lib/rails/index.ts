@@ -6,7 +6,12 @@ import { demoInternalRail } from "./demo-internal.ts";
 import { usdcRail } from "./usdc.ts";
 import { RailError, type RailId, type SettlementRail } from "./types.ts";
 
-const RAILS: Record<RailId, SettlementRail> = {
+// Partial, deliberately: `circle-fiat` exists as a RailId from migration 0005
+// (the enum values had to land together) but has no implementation until A4.
+// railFor's existing not-found guard is the honest answer in the meantime —
+// the concept is declared, the capability is not claimed, and the feature flag
+// keeps it unreachable from the UI either way.
+const RAILS: Partial<Record<RailId, SettlementRail>> = {
   "demo-internal": demoInternalRail,
   usdc: usdcRail,
 };

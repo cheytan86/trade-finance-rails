@@ -65,11 +65,11 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
   const livePricing = snapshot ?? (terms ? computePricing(terms, new Date()) : null);
 
   const fundingPreview =
-    invoice.status === "priced" && terms && refs.funderCash && refs.treasury
+    invoice.status === "priced" && terms && refs.funderCash && refs.clientCollections
       ? toDialog(
           fundingEntries(computePricing(terms, new Date()), {
             funderCash: refs.funderCash,
-            treasury: refs.treasury,
+            clientCollections: refs.clientCollections,
           }),
         )
       : null;
@@ -77,14 +77,14 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
   const disbursementPreview =
     invoice.status === "funded" &&
     snapshot &&
-    refs.treasury &&
+    refs.clientCollections &&
     refs.supplierPayable &&
-    refs.feeIncome
+    refs.platformOperating
       ? toDialog(
           disbursementEntries(snapshot, {
-            treasury: refs.treasury,
+            clientCollections: refs.clientCollections,
             supplierPayable: refs.supplierPayable,
-            feeIncome: refs.feeIncome,
+            platformOperating: refs.platformOperating,
           }),
         )
       : null;
@@ -110,14 +110,14 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
     !paidTypes.has("payout") &&
     snapshot &&
     overdue &&
-    refs.treasury &&
-    refs.funderCash &&
-    refs.feeIncome
+    refs.clientCollections &&
+    refs.funderCash
       ? toDialog(
+          // Two accounts: the funder's interest never left client money, so
+          // there is no platform account to draw it back out of (cycle 2).
           payoutEntries(snapshot, overdue, {
-            treasury: refs.treasury,
+            clientCollections: refs.clientCollections,
             funderCash: refs.funderCash,
-            feeIncome: refs.feeIncome,
           }),
         )
       : null;
@@ -127,14 +127,14 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
     !paidTypes.has("residual") &&
     snapshot &&
     overdue &&
-    refs.treasury &&
+    refs.clientCollections &&
     refs.supplierPayable &&
-    refs.feeIncome
+    refs.platformOperating
       ? toDialog(
           residualEntries(snapshot, overdue, {
-            treasury: refs.treasury,
+            clientCollections: refs.clientCollections,
             supplierPayable: refs.supplierPayable,
-            feeIncome: refs.feeIncome,
+            platformOperating: refs.platformOperating,
           }),
         )
       : null;

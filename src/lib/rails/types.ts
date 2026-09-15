@@ -13,7 +13,7 @@
 // same result shapes, same refusals. Cycle 1 ships two implementations —
 // `demo-internal` (cycle 0's instant booking) and `usdc` (Base Sepolia).
 
-export type RailId = "demo-internal" | "usdc";
+export type RailId = "demo-internal" | "usdc" | "circle-fiat";
 
 /** Who is moving money, in rail-neutral terms. The rail maps these to its own
  *  addressing (a wallet, later a bank account or a Circle wallet id). */

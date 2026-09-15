@@ -546,7 +546,7 @@ export async function fundInvoice(
 
     const entries = fundingEntries(snapshot, {
       funderCash: await accountId(db, "funder_cash", funder.id),
-      treasury: await accountId(db, "platform_treasury", null),
+      clientCollections: await accountId(db, "client_collections", null),
     });
 
     await settleThroughRail(db, {
@@ -596,9 +596,9 @@ export async function disburseInvoice(
     const snapshot = parseSnapshot(inv.pricingSnapshot);
 
     const entries = disbursementEntries(snapshot, {
-      treasury: await accountId(db, "platform_treasury", null),
+      clientCollections: await accountId(db, "client_collections", null),
       supplierPayable: await accountId(db, "supplier_payable", inv.supplierId),
-      feeIncome: await accountId(db, "fee_income", null),
+      platformOperating: await accountId(db, "platform_operating", null),
     });
 
     await settleThroughRail(db, {
@@ -648,7 +648,7 @@ export async function repayInvoice(
 
     const entries = repaymentEntries(inv.faceValueMinor, {
       debtorCash: await accountId(db, "debtor_cash", inv.debtorId),
-      treasury: await accountId(db, "platform_treasury", null),
+      clientCollections: await accountId(db, "client_collections", null),
     });
 
     await settleThroughRail(db, {
@@ -742,10 +742,12 @@ export async function payoutFunder(
       .limit(1);
     if (!funder) return { error: "No funder exists in the demo data." };
 
+    // Two accounts, not three: under the cycle-2 split the funder's interest
+    // never left client money, so there is no platform account to draw it
+    // back out of.
     const entries = payoutEntries(snapshot, overdue, {
-      treasury: await accountId(db, "platform_treasury", null),
+      clientCollections: await accountId(db, "client_collections", null),
       funderCash: await accountId(db, "funder_cash", funder.id),
-      feeIncome: await accountId(db, "fee_income", null),
     });
 
     await settleThroughRail(db, {
@@ -783,9 +785,9 @@ export async function payResidual(
     const { snapshot, overdue } = await overdueFor(db, inv);
 
     const entries = residualEntries(snapshot, overdue, {
-      treasury: await accountId(db, "platform_treasury", null),
+      clientCollections: await accountId(db, "client_collections", null),
       supplierPayable: await accountId(db, "supplier_payable", inv.supplierId),
-      feeIncome: await accountId(db, "fee_income", null),
+      platformOperating: await accountId(db, "platform_operating", null),
     });
 
     const toSupplier = snapshot.supplierResidualMinor - overdue.supplierChargeMinor;

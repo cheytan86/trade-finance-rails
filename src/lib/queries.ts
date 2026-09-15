@@ -43,9 +43,9 @@ export async function accountRefsFor(supplierId: string) {
     funderCash: funderCashRow
       ? { id: funderCashRow.id, label: accountLabel(funderCashRow.kind, funderCashRow.partyName) }
       : null,
-    treasury: pick("platform_treasury", null),
+    clientCollections: pick("client_collections", null),
     supplierPayable: pick("supplier_payable", supplierId),
-    feeIncome: pick("fee_income", null),
+    platformOperating: pick("platform_operating", null),
     // Keyed by debtor: the /pay page resolves its own payer.
     debtorCash: Object.fromEntries(
       rows

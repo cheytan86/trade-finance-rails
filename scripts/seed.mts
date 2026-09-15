@@ -67,10 +67,10 @@ const chart = await db
   .insert(accounts)
   .values([
     { kind: "funder_cash", partyId: northgate.id, currency: "USD" },
-    { kind: "platform_treasury", partyId: null, currency: "USD" },
+    { kind: "client_collections", partyId: null, currency: "USD" },
     { kind: "supplier_payable", partyId: amber.id, currency: "USD" },
     { kind: "supplier_payable", partyId: ostrava.id, currency: "USD" },
-    { kind: "fee_income", partyId: null, currency: "USD" },
+    { kind: "platform_operating", partyId: null, currency: "USD" },
     // cycle 1: where each debtor's repayment comes from
     { kind: "debtor_cash", partyId: meridian.id, currency: "USD" },
     { kind: "debtor_cash", partyId: halvorsen.id, currency: "USD" },
@@ -228,7 +228,7 @@ const ldb = getDb();
     idempotencyKey: `funding:${inv.id}`,
     entries: [
       { accountId: acct("funder_cash", northgate.id), amountMinor: -snap.principalMinor },
-      { accountId: acct("platform_treasury"), amountMinor: snap.principalMinor },
+      { accountId: acct("client_collections"), amountMinor: snap.principalMinor },
     ],
   });
 }
@@ -271,7 +271,7 @@ const ldb = getDb();
     idempotencyKey: `funding:${inv.id}`,
     entries: [
       { accountId: acct("funder_cash", northgate.id), amountMinor: -snap.principalMinor },
-      { accountId: acct("platform_treasury"), amountMinor: snap.principalMinor },
+      { accountId: acct("client_collections"), amountMinor: snap.principalMinor },
     ],
   });
   // The deliberate three-entry movement: fee lines visible, never margin.
@@ -281,12 +281,14 @@ const ldb = getDb();
     evidenceRef: `demo:seed:disbursement:${inv.id.slice(0, 8)}`,
     idempotencyKey: `disbursement:${inv.id}`,
     entries: [
-      { accountId: acct("platform_treasury"), amountMinor: -snap.principalMinor },
-      { accountId: acct("supplier_payable", amber.id), amountMinor: snap.supplierDisbursementMinor },
+      // cycle 2: the platform takes ONLY its margin; the funder's interest
+      // stays in client money until payout.
       {
-        accountId: acct("fee_income"),
-        amountMinor: snap.principalMinor - snap.supplierDisbursementMinor,
+        accountId: acct("client_collections"),
+        amountMinor: -(snap.supplierDisbursementMinor + snap.platformMarginMinor),
       },
+      { accountId: acct("supplier_payable", amber.id), amountMinor: snap.supplierDisbursementMinor },
+      { accountId: acct("platform_operating"), amountMinor: snap.platformMarginMinor },
     ],
   });
 }

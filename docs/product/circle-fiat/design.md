@@ -513,7 +513,11 @@ src/lib/deals/actions.ts        settleThroughRail writes the pending row before
                                 usdc.ts:142 has been promising since cycle 1
 src/lib/deals/preview.ts        account-interface rename treasury →
                                 clientCollections (FIX 2); NO entry shape changes
-src/lib/deals/queries.ts        read open pending rows for the deal page and queue
+src/lib/queries.ts              read open pending rows for the deal page, queue,
+                                ledger, supplier and funder — the host's shared
+                                query module (PATH CORRECTED at Gate 0.5: the
+                                design said src/lib/deals/queries.ts, which does
+                                not exist; cycle 1 used this same file)
 src/db/schema.ts                the three new tables, two enum values, the rename,
                                 the circle-payment-id uniqueness guard
 src/lib/ledger/index.ts         ONE addition only: the exported declaration of
