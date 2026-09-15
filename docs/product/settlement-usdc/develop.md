@@ -133,6 +133,20 @@ rail posture         no mainnet id can verify (5 refused by test); every rail
                      label contains "demo" or "testnet", asserted by test
 ```
 
+## Deployed (2026-09-15)
+
+**https://trade-finance-rails-git-feat-settlem-d91bd6-cheytan86s-projects.vercel.app**
+
+Preview of the unmerged `feat/settlement-usdc` branch — not production. (The
+branch name exceeds Vercel's alias length, so the stable alias is the hashed
+form above rather than the usual full-branch URL; it follows the branch and
+moves only on push.) Verified live: the three ops stages render, validation
+offers its three outcomes with the invoice document, the pricing panel shows
+the locked snapshot and indicators, and the supplier's correction card
+appears with ops's note. Settings unchanged from cycle 0's deploy record:
+`DATABASE_URL` in the Preview scope only, deployment protection off,
+production dark.
+
 ## Section B — native polish (2026-09-15)
 
 Audited by measurement, not memory:
