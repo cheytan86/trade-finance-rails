@@ -38,6 +38,7 @@ let platformOwnId: string;
 const instantRail = (ref = "demo:ok"): SettlementRail => ({
   id: "demo-internal",
   label: "instant (test)",
+  settlement: "immediate",
   prepare: async () => ({
     rail: "demo-internal",
     amountMinor: 0n,
@@ -47,20 +48,29 @@ const instantRail = (ref = "demo:ok"): SettlementRail => ({
   }),
   execute: async () => ({ reference: ref }),
   verify: async () => ({
-    reference: ref,
-    evidenceKind: "demo-internal",
-    amountMinor: 0n,
-    from: "a",
-    to: "b",
+    status: "settled",
+    transfer: {
+      reference: ref,
+      evidenceKind: "demo-internal",
+      amountMinor: 0n,
+      from: "a",
+      to: "b",
+    },
   }),
 });
 
-/** Money has moved; the rail cannot confirm it yet. THE cycle-1 scenario. */
+/** Money has moved; the rail cannot confirm it yet. THE cycle-1 scenario.
+ *  Since A3 this is a RETURNED outcome, not a thrown error — "not yet" stopped
+ *  having to disguise itself as a failure. */
 const stallsAfterSending = (ref: string): SettlementRail => ({
   ...instantRail(ref),
-  verify: async () => {
-    throw new RailError("rail-not-confirmed-yet", `${ref} has not confirmed yet`);
-  },
+  verify: async () => ({ status: "pending", detail: `${ref} has not confirmed yet` }),
+});
+
+/** The rail's record says it will not happen — distinct from a mismatch. */
+const railReportsFailure = (ref: string): SettlementRail => ({
+  ...instantRail(ref),
+  verify: async () => ({ status: "failed", reason: `${ref} was rejected by the rail` }),
 });
 
 /** The rail's own record contradicts what we expected — a real refusal. */
@@ -234,6 +244,23 @@ describe.skipIf(!HAS_DB)("refusals book nothing, and say which kind of nothing",
     const [row] = await pendingRowsFor(invoiceId);
     expect(row.status).toBe("failed");
     expect(await countEvents(invoiceId)).toBe(0);
+  });
+
+  it("a rail REPORTING failure is distinct from a rail refusing a mismatch", async () => {
+    // Both end the leg, and the reason text is what tells them apart: one is
+    // the payment's own outcome, the other is a sign something is wrong.
+    const reported = await anInvoice();
+    const mismatched = await anInvoice();
+    const a = await settleLeg(db, spec(reported), () => railReportsFailure("r-fail"));
+    const b = await settleLeg(db, spec(mismatched), () => refusesOnVerify("r-mismatch"));
+
+    expect(a.status).toBe("failed");
+    expect(b.status).toBe("failed");
+    if (a.status !== "failed" || b.status !== "failed") throw new Error("unreachable");
+    expect(a.reason).toMatch(/rejected by the rail/i);
+    expect(b.reason).toMatch(/different amount/i);
+    expect(await countEvents(reported)).toBe(0);
+    expect(await countEvents(mismatched)).toBe(0);
   });
 
   it("'not yet' is not 'no' — the two outcomes are distinguishable", async () => {

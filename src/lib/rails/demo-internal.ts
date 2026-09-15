@@ -11,7 +11,7 @@ import {
   type TransferPreview,
   type TransferReceipt,
   type TransferRequest,
-  type VerifiedTransfer,
+  type VerifyOutcome,
 } from "./types.ts";
 
 const LABELS: Record<TransferRequest["from"], string> = {
@@ -24,6 +24,8 @@ const LABELS: Record<TransferRequest["from"], string> = {
 export const demoInternalRail: SettlementRail = {
   id: "demo-internal",
   label: "Demo-internal (no external movement)",
+  // Books inside the request that asked for it — cycle 0's behaviour.
+  settlement: "immediate",
 
   async prepare(req: TransferRequest): Promise<TransferPreview> {
     return {
@@ -43,7 +45,7 @@ export const demoInternalRail: SettlementRail = {
     return { reference: `demo:${req.idempotencyKey}` };
   },
 
-  async verify(req: TransferRequest, receipt: TransferReceipt): Promise<VerifiedTransfer> {
+  async verify(req: TransferRequest, receipt: TransferReceipt): Promise<VerifyOutcome> {
     // The only check available: the reference is the one this request would
     // have produced. Honest about what that proves — tamper-evidence within
     // the demo, never independent truth.
@@ -55,11 +57,14 @@ export const demoInternalRail: SettlementRail = {
       );
     }
     return {
-      reference: receipt.reference,
-      evidenceKind: "demo-internal",
-      amountMinor: req.amountMinor,
-      from: LABELS[req.from],
-      to: LABELS[req.to],
+      status: "settled",
+      transfer: {
+        reference: receipt.reference,
+        evidenceKind: "demo-internal",
+        amountMinor: req.amountMinor,
+        from: LABELS[req.from],
+        to: LABELS[req.to],
+      },
     };
   },
 };

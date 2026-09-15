@@ -14,7 +14,7 @@ import {
   type TransferPreview,
   type TransferReceipt,
   type TransferRequest,
-  type VerifiedTransfer,
+  type VerifyOutcome,
 } from "./types.ts";
 import { demoWallet, demoWalletAddress, type WalletActor } from "./wallets.ts";
 import { verifyUsdcTransfer, BASE_SEPOLIA, assertTestnet } from "./verify-usdc.ts";
@@ -51,6 +51,9 @@ const shortAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 export const usdcRail: SettlementRail = {
   id: "usdc",
   label: "USDC on Base Sepolia (testnet)",
+  // Broadcast is instant; confirmation is not. A block usually lands in
+  // seconds, so most legs settle in the same request — but never by waiting.
+  settlement: "immediate",
 
   async prepare(req: TransferRequest): Promise<TransferPreview> {
     const from = demoWalletAddress(req.from as WalletActor);
@@ -124,23 +127,39 @@ export const usdcRail: SettlementRail = {
     }
   },
 
-  async verify(req: TransferRequest, receipt: TransferReceipt): Promise<VerifiedTransfer> {
+  async verify(req: TransferRequest, receipt: TransferReceipt): Promise<VerifyOutcome> {
     const pub = publicClient();
     const from = demoWalletAddress(req.from as WalletActor);
     const to = demoWalletAddress(req.to as WalletActor);
 
+    // ONE LOOK, NO WAITING (cycle 2). This used to block for up to 60 seconds
+    // on waitForTransactionReceipt and then throw. Two things were wrong with
+    // that. The honest one: an unmined transaction is `pending`, not an error,
+    // and the seam can now say so. The practical one: cycle 1's deploy audit
+    // found that a 60-second wait inside a server action can be killed by the
+    // platform's function timeout — and since `execute` has already
+    // broadcast, that killed the request AFTER the money moved. The pending
+    // row survives either way now, but not waiting at all removes the
+    // exposure rather than surviving it.
     let chainReceipt;
     try {
-      chainReceipt = await pub.waitForTransactionReceipt({
+      chainReceipt = await pub.getTransactionReceipt({
         hash: receipt.reference as `0x${string}`,
-        confirmations: 1, // demo posture, stated on screen
-        timeout: 60_000,
       });
     } catch {
-      throw new RailError(
-        "rail-not-confirmed-yet",
-        `Transaction ${receipt.reference} has not confirmed yet. Nothing has been booked — use Check status to verify it again.`,
-      );
+      return {
+        status: "pending",
+        detail: `Transaction ${receipt.reference} has not been mined yet.`,
+      };
+    }
+
+    // Mined and reverted is a real answer: it will not happen. Nothing booked,
+    // and nothing to reverse, because nothing moved.
+    if (chainReceipt.status === "reverted") {
+      return {
+        status: "failed",
+        reason: `Transaction ${receipt.reference} reverted on chain.`,
+      };
     }
 
     verifyUsdcTransfer({
@@ -157,12 +176,15 @@ export const usdcRail: SettlementRail = {
     });
 
     return {
-      reference: receipt.reference,
-      evidenceKind: "tx-hash",
-      amountMinor: req.amountMinor,
-      from,
-      to,
-      explorerUrl: `${EXPLORER}/tx/${receipt.reference}`,
+      status: "settled",
+      transfer: {
+        reference: receipt.reference,
+        evidenceKind: "tx-hash",
+        amountMinor: req.amountMinor,
+        from,
+        to,
+        explorerUrl: `${EXPLORER}/tx/${receipt.reference}`,
+      },
     };
   },
 };

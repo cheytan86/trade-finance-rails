@@ -166,6 +166,25 @@ A2       FIX 1 — the in-flight record and the single booking path.
          so "written first" is distinguished from "written last".
          GATE: tsc 0 · lint 0 · 127/127 tests · build ✓.
 
+A3       The seam's three-outcome verify, and both existing rails conformed.
+         verify() now returns settled | pending | failed. A MISMATCH still
+         THROWS — wrong amount, wrong recipient, wrong chain are not outcomes
+         of a payment, they are signs something is wrong and must stay loud.
+         Rails declare `settlement: "immediate" | "deferred"`.
+         pending.ts lost its isNotYet() rule-name check, exactly as that
+         function's own comment predicted it would.
+         AND IT CLOSED THE DEPLOY AUDIT'S BLOCKER 1: usdc.verify no longer
+         blocks up to 60s on waitForTransactionReceipt. It looks once; an
+         unmined transaction is `pending`, and a reverted one is `failed`.
+         The 60-second wait inside a server action was the thing a platform
+         function timeout could kill AFTER execute had broadcast. Not waiting
+         removes the exposure rather than surviving it.
+         GATE: tsc 0 · lint 0 · 128/128 · build ✓.
+         CONTRACT VERIFIED: src/lib/domain/states.ts is byte-identical to
+         cycle 1 (git diff vs feat/settlement-usdc is empty) and contains 0
+         rail branches — the cycle's central claim, checked not asserted.
+         Untouchables clean: money, pricing, roles, wallets.ts, vercel.json.
+
 SCHEMA AMENDMENT (approved 2026-09-15, Chetan) — pending_settlements.entries
          jsonb, migration 0006. The design's data contract did not name it.
          Reason: completeSettlement is called hours later by the webhook, and

@@ -27,7 +27,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { pendingSettlements } from "../../db/schema.ts";
 import type { Db } from "../../db/client.ts";
 import { bookMovement, LedgerError, type EntryInput } from "../ledger/index.ts";
-import { railFor, RailError } from "../rails/index.ts";
+import { railFor } from "../rails/index.ts";
 import type { RailActor, RailId } from "../rails/types.ts";
 
 export class SettlementError extends Error {
@@ -217,21 +217,30 @@ export async function completeSettlement(
     amountMinor: row.amountMinor,
   };
 
-  let verified;
+  let outcome;
   try {
-    verified = await rail.verify(
+    outcome = await rail.verify(
       { ...req, ...actorsFor(row.type) },
       { reference: row.railReference },
     );
   } catch (err) {
-    if (err instanceof RailError && isNotYet(err.rule)) {
-      // NOT a failure. The rail has not made up its mind, so neither do we.
-      return { status: "pending", reference: row.railReference, pendingId };
-    }
+    // A THROW IS A MISMATCH, not an outcome of the payment: the rail's record
+    // contradicts what we expected (wrong amount, wrong recipient, wrong
+    // chain). Loud by design — nothing books and the leg fails.
     const reason = err instanceof Error ? err.message : "verification refused";
     await markFailed(db, pendingId, reason);
     return { status: "failed", reason, pendingId };
   }
+
+  if (outcome.status === "pending") {
+    // "Not yet" is not "no". Book nothing, fail nothing, stay in flight.
+    return { status: "pending", reference: row.railReference, pendingId };
+  }
+  if (outcome.status === "failed") {
+    await markFailed(db, pendingId, outcome.reason);
+    return { status: "failed", reason: outcome.reason, pendingId };
+  }
+  const verified = outcome.transfer;
 
   const entries = parseStoredEntries(row.entries);
   let eventId: string;
@@ -272,17 +281,6 @@ export function actorsFor(type: LegType): { from: RailActor; to: RailActor } {
     case "residual":
       return { from: "platform", to: "supplier" };
   }
-}
-
-/**
- * "Not yet" is not "no". A rail that cannot confirm a transfer yet must leave
- * the leg in flight — booking nothing and failing nothing. Cycle 1's USDC rail
- * already speaks this: `rail-not-confirmed-yet`. A3 replaces this rule-name
- * check with a three-outcome return from verify(), at which point this
- * function goes away.
- */
-function isNotYet(rule: string): boolean {
-  return rule === "rail-not-confirmed-yet" || rule === "rail-pending";
 }
 
 async function markSettled(db: Db, pendingId: string): Promise<void> {

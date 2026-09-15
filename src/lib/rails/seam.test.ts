@@ -66,9 +66,13 @@ describe("the trivial rail behaves like a rail", () => {
     const r = await demoInternalRail.execute(req);
     expect(r.reference).toBe("demo:funding:inv-1");
     const v = await demoInternalRail.verify(req, r);
-    expect(v.evidenceKind).toBe("demo-internal");
-    expect(v.amountMinor).toBe(req.amountMinor);
-    expect(v.explorerUrl).toBeUndefined();
+    // cycle 2: verify answers with an OUTCOME, not a bare transfer. An
+    // immediate rail always settles inside the request that called it.
+    expect(v.status).toBe("settled");
+    if (v.status !== "settled") throw new Error("unreachable");
+    expect(v.transfer.evidenceKind).toBe("demo-internal");
+    expect(v.transfer.amountMinor).toBe(req.amountMinor);
+    expect(v.transfer.explorerUrl).toBeUndefined();
   });
 
   it("refuses evidence belonging to another movement", async () => {

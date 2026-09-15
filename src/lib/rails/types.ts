@@ -67,13 +67,39 @@ export class RailError extends Error {
   }
 }
 
+/**
+ * What `verify` found when it consulted the rail's own record. Three answers,
+ * and the distinction between the last two is the whole of cycle 2:
+ *
+ *   settled — it happened, here is the proof. Book it.
+ *   pending — the rail has not made up its mind. Book NOTHING, fail nothing,
+ *             and leave the leg in flight. "Not yet" is not "no".
+ *   failed  — the rail's own record says it will not happen. Book nothing;
+ *             there is nothing to reverse because nothing moved.
+ *
+ * A MISMATCH IS NOT ONE OF THESE. If the rail's record contradicts what we
+ * expected — wrong amount, wrong recipient, wrong chain — verify still THROWS
+ * a RailError with its named rule, because that is not an outcome of the
+ * payment, it is a sign that something is wrong and must be loud.
+ */
+export type VerifyOutcome =
+  | { status: "settled"; transfer: VerifiedTransfer }
+  | { status: "pending"; detail?: string }
+  | { status: "failed"; reason: string };
+
+/** Whether this rail can answer `verify` inside the request that called
+ *  `execute`. Deferred rails cannot, and the screens say so before a human
+ *  confirms. */
+export type SettlementMode = "immediate" | "deferred";
+
 export interface SettlementRail {
   readonly id: RailId;
   /** Shown wherever the rail is named; the demo must never look production. */
   readonly label: string;
+  readonly settlement: SettlementMode;
   prepare(req: TransferRequest): Promise<TransferPreview>;
   execute(req: TransferRequest): Promise<TransferReceipt>;
-  /** Re-derives the movement from the rail's own records. Throws RailError
-   *  with a named rule on any mismatch — it never returns a soft failure. */
-  verify(req: TransferRequest, receipt: TransferReceipt): Promise<VerifiedTransfer>;
+  /** Re-derives the movement from the rail's own records. Returns one of the
+   *  three outcomes above; throws RailError with a named rule on a mismatch. */
+  verify(req: TransferRequest, receipt: TransferReceipt): Promise<VerifyOutcome>;
 }
