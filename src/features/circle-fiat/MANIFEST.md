@@ -200,6 +200,34 @@ A4       The Circle rail, client and verifier — and it moved real sandbox mone
          balance 50,000.00 → 49,995.50. execute → verify ran end to end.
          27 new tests. 158 total.
 
+A5       The webhook route, signature verification, and the signed replay.
+         THE APP'S FIRST ROUTE HANDLER and first unauthenticated write path —
+         built inside-out from that fact. No seat, no cookie; getIdentity() is
+         never called. Fails closed on flag-off, missing signature, bad
+         signature, malformed body. Raw bytes are verified BEFORE any parse,
+         because a JSON round trip does not reliably reproduce what was signed.
+         The body is a doorbell, never evidence: it only prompts a re-read of
+         Circle's own record, which is why out-of-order delivery cannot matter.
+         Books through completeSettlement — no second booking path.
+         LIVE PROOF over real HTTP against the dev server:
+           authentic, unknown reference → 200 "no matching settlement"
+           forged (signature over a different body) → 403 "signature refused"
+           no signature at all → 403
+           all four recorded in webhook_deliveries, the refusals included
+         17 signature tests. 175 total.
+
+CORRECTED BY READING THE DOCS — there is NO shared webhook secret. Circle signs
+         with an ASYMMETRIC key: `X-Circle-Signature` + `X-Circle-Key-Id`, and
+         the public key is fetched from Circle by that id. CIRCLE_WEBHOOK_SECRET
+         was removed from .env.example; nothing for us to hold is a better
+         posture than a secret we would have to protect. Circle Mint delivers
+         over SNS, so the SubscriptionConfirmation handshake is handled too —
+         with an SSRF guard, because a SubscribeURL arrives inside a request
+         body and fetching it unchecked turns this endpoint into a proxy.
+         The local replay key (`local-replay`) exists only because Circle
+         cannot reach localhost, and is REFUSED outright when NODE_ENV is
+         production — asserted by test.
+
 FOUND LIVE, AND IT WAS NOT A FORMAT QUIBBLE — Circle 422s on a non-UUID
          idempotencyKey, with no field named. Our key is `${legType}:${invoiceId}`
          (the ledger's, deliberately). The fix is to HASH it, not regenerate it:
