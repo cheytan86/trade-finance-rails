@@ -26,6 +26,7 @@ import {
   payoutEntries,
   residualEntries,
 } from "@/lib/deals/preview";
+import { railFor } from "@/lib/rails";
 import { computeOverdue, daysLateBetween } from "@/lib/pricing/overdue";
 import { formatMinor } from "@/lib/money";
 
@@ -198,7 +199,9 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
           {invoice.issueDate ? <span>issued {invoice.issueDate}</span> : null}
           <span>due {invoice.dueDate}</span>
           <span className="font-mono text-[11.5px]">
-            rail: {invoice.rail === "usdc" ? "USDC · Base Sepolia (testnet)" : "demo-internal"}
+            {/* The registry names the rail. A hard-coded pair here told a
+                circle-fiat deal it was demo-internal — found live 2026-09-18. */}
+            rail: {railFor(invoice.rail).label}
           </span>
           {invoice.description ? (
             <span className="basis-full text-muted">{invoice.description}</span>
@@ -448,9 +451,11 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
               <p className="mt-1 text-[12px] text-muted">
                 Every figure in a confirmation is recomputed on the server at the moment of the
                 consequence — the browser posts the decision, never the amounts.
-                {invoice.rail === "usdc"
-                  ? " On this deal each gate also moves real testnet USDC and books only once the transfer is verified on-chain."
-                  : null}
+                {railFor(invoice.rail).settlement === "deferred"
+                  ? ` On this deal each gate INITIATES a movement on ${railFor(invoice.rail).label} and books only once the rail confirms — the deal does not advance in the meantime.`
+                  : invoice.rail === "usdc"
+                    ? " On this deal each gate also moves real testnet USDC and books only once the transfer is verified on-chain."
+                    : null}
               </p>
             </div>
           )}

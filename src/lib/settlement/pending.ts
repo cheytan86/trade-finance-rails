@@ -24,7 +24,11 @@
 // `completeSettlement`, so there is exactly one place where money books.
 
 import { and, eq, sql } from "drizzle-orm";
-import { pendingSettlements, settlementDestinations } from "../../db/schema.ts";
+import {
+  pendingSettlements,
+  settlementDestinations,
+  settlementEvents,
+} from "../../db/schema.ts";
 import type { Db } from "../../db/client.ts";
 import { bookMovement, LedgerError, type EntryInput } from "../ledger/index.ts";
 import { railFor } from "../rails/index.ts";
@@ -200,7 +204,10 @@ export async function completeSettlement(
     throw new SettlementError("pending-not-found", `no pending settlement ${pendingId}`);
   }
   if (row.status === "settled") {
-    // Idempotent by design: a duplicate webhook lands here and does nothing.
+    // Idempotent by design: a duplicate webhook lands here and books nothing.
+    // It still advances, because a deal whose money booked before this rule
+    // existed is exactly the deal that needs it.
+    await advanceFromBookedLegs(db, row.invoiceId);
     return {
       status: "settled",
       reference: row.railReference ?? "",
@@ -263,12 +270,14 @@ export async function completeSettlement(
     if (err instanceof LedgerError && err.rule === "ledger-already-recorded") {
       // Two deliveries raced. The database settled it; this one is a no-op.
       await markSettled(db, pendingId);
+      await advanceFromBookedLegs(db, row.invoiceId);
       return { status: "settled", reference: verified.reference, eventId: "" };
     }
     throw err;
   }
 
   await markSettled(db, pendingId);
+  await advanceFromBookedLegs(db, row.invoiceId);
   return { status: "settled", reference: verified.reference, eventId };
 }
 
@@ -316,6 +325,70 @@ async function resolveRefs(
 }
 
 /** Which actors a leg moves between — the rail maps these to its own addressing. */
+/**
+ * THE DEAL ADVANCES WHERE THE MONEY BOOKS.
+ *
+ * Cycle 0 and 1 advanced the invoice in the request that pressed the gate,
+ * because on an immediate rail the booking and the request were the same
+ * moment. On a deferred rail they are not, and cycle 2 shipped the gap: a
+ * fiat leg booked its money through the webhook and the deal stayed where it
+ * was — Fund still offered, Disburse still refused, with the funding movement
+ * sitting in the ledger. Found live at case 1, 2026-09-18.
+ *
+ * So the transition moves here, beside the booking, where all three paths —
+ * the initiating request, the webhook, and Check status — already pass.
+ *
+ * It is derived from BOOKED MOVEMENTS rather than from the completion that
+ * triggered it. That is what makes it repair rather than merely record: a
+ * deal already stuck, whose pending row is settled and whose completion will
+ * never fire again, still advances the next time anything calls it. It also
+ * only ever moves forward — a replayed webhook cannot walk a deal backwards.
+ */
+const MONEY_PROGRESSION = ["priced", "funded", "disbursed", "repaid", "settled"] as const;
+type MoneyStatus = (typeof MONEY_PROGRESSION)[number];
+
+export async function advanceFromBookedLegs(db: Db, invoiceId: string): Promise<void> {
+  const booked = await db
+    .select({ type: settlementEvents.type })
+    .from(settlementEvents)
+    .where(eq(settlementEvents.invoiceId, invoiceId));
+  const kinds = new Set<string>(booked.map((b) => b.type));
+
+  // The furthest state the booked money justifies. Payout and residual settle
+  // the deal only together, in either order — cycle 1's rule, unchanged.
+  const target: MoneyStatus | null =
+    kinds.has("payout") && kinds.has("residual")
+      ? "settled"
+      : kinds.has("repayment")
+        ? "repaid"
+        : kinds.has("disbursement")
+          ? "disbursed"
+          : kinds.has("funding")
+            ? "funded"
+            : null;
+  if (!target) return;
+
+  const [inv] = await db
+    .select({ status: invoices.status })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+  if (!inv) return;
+
+  const from = MONEY_PROGRESSION.indexOf(inv.status as MoneyStatus);
+  const to = MONEY_PROGRESSION.indexOf(target);
+  // -1 is a status off this path entirely (submitted, returned, refused):
+  // not ours to move. `to <= from` is a replay, or a leg that booked out of
+  // order — either way, nothing to do.
+  if (from === -1 || to <= from) return;
+
+  // Compare-and-swap on the status we read, so two deliveries racing here
+  // cannot both advance.
+  await db
+    .update(invoices)
+    .set({ status: target })
+    .where(and(eq(invoices.id, invoiceId), eq(invoices.status, inv.status)));
+}
+
 export function actorsFor(type: LegType): { from: RailActor; to: RailActor } {
   switch (type) {
     case "funding":

@@ -26,7 +26,7 @@ import {
 } from "./preview";
 import { getIdentity } from "@/lib/roles/identity";
 import { resolvePartyForSeat } from "@/lib/queries";
-import { type RailActor, type RailId } from "@/lib/rails";
+import { ALL_RAILS, type RailActor, type RailId } from "@/lib/rails";
 import { settleLeg, completeSettlement, SettlementError } from "@/lib/settlement/pending";
 import { computeOverdue, daysLateBetween } from "@/lib/pricing/overdue";
 
@@ -395,8 +395,27 @@ export async function priceInvoice(
         : BigInt(bps("txnCostValue", "Transaction cost"));
     if (txnCostValue < 0n) return { error: "Transaction cost cannot be negative." };
 
+    // THE REGISTRY DECIDES, not a hard-coded pair. Cycle 1 wrote this as
+    // `railChoice === "usdc" ? "usdc" : "demo-internal"`, and cycle 2's third
+    // option fell through the else branch: ops picked the fiat rail, the deal
+    // was stored as demo-internal, and the funding leg booked instantly with
+    // nothing on screen saying why. Found live at case 1, 2026-09-18.
+    //
+    // A rail this deployment cannot honour is a NAMED REFUSAL, never a quiet
+    // substitution — the same rule the rest of this cycle applies to money.
     const railChoice = String(formData.get("rail") ?? "demo-internal");
-    const rail: RailId = railChoice === "usdc" ? "usdc" : "demo-internal";
+    if (!ALL_RAILS.some((r) => r.id === railChoice)) {
+      return { error: `"${railChoice}" is not a settlement rail this deployment offers.` };
+    }
+    // The flag is checked HERE as well as in the browser: a select rendered
+    // without the option is a courtesy, not a control.
+    if (railChoice === "circle-fiat" && !process.env.NEXT_PUBLIC_ENABLE_CIRCLE_RAIL) {
+      return {
+        error:
+          "The fiat rail is switched off in this deployment. Price the deal on another rail, or set NEXT_PUBLIC_ENABLE_CIRCLE_RAIL and reload.",
+      };
+    }
+    const rail = railChoice as RailId;
 
     // Price the deal as proposed and refuse terms that would book a loss:
     // margin = supplier interest + fee − funder interest, and a platform that
@@ -567,6 +586,20 @@ export async function fundInvoice(
       clientCollections: await accountId(db, "client_collections", null),
     });
 
+    // THE SNAPSHOT LOCKS AT THE GATE, not at confirmation. On a deferred rail
+    // the two are hours apart, and a tenor that shrinks in between must never
+    // move a deal that was already funded on the old one. Written before the
+    // money is instructed, guarded on the status this press was authorised
+    // against.
+    const locked = await db
+      .update(invoices)
+      .set({ pricingSnapshot: snapshotToJson(snapshot) })
+      .where(and(eq(invoices.id, id), eq(invoices.status, "priced")))
+      .returning({ id: invoices.id });
+    if (locked.length === 0) {
+      return { error: "The deal moved while you were funding — reload and look again." };
+    }
+
     const settled = await settleThroughRail(db, {
       railId: inv.rail,
       invoiceId: id,
@@ -577,18 +610,9 @@ export async function fundInvoice(
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
     if (!settled) return inFlight(id);
-
-    // CAS. Unreachable-in-practice failure (the idempotency key already
-    // guards the booking), but an unguarded write is a habit, not a hole we
-    // leave open.
-    const updated = await db
-      .update(invoices)
-      .set({ status: "funded", pricingSnapshot: snapshotToJson(snapshot) })
-      .where(and(eq(invoices.id, id), eq(invoices.status, "priced")))
-      .returning({ id: invoices.id });
-    if (updated.length === 0) {
-      return { error: "Funding booked but the deal moved concurrently — check the ledger view." };
-    }
+    // The status advance lives in completeSettlement now — see
+    // advanceFromBookedLegs. Repeating it here would fight it: the CAS would
+    // find `funded` where it expected `priced` and report a false conflict.
   } catch (err) {
     return { error: asMessage(err) };
   }
@@ -632,15 +656,7 @@ export async function disburseInvoice(
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
     if (!settled) return inFlight(id);
-
-    const updated = await db
-      .update(invoices)
-      .set({ status: "disbursed" })
-      .where(and(eq(invoices.id, id), eq(invoices.status, "funded")))
-      .returning({ id: invoices.id });
-    if (updated.length === 0) {
-      return { error: "Disbursement booked but the deal moved concurrently — check the ledger view." };
-    }
+    // Advanced by completeSettlement — see advanceFromBookedLegs.
   } catch (err) {
     return { error: asMessage(err) };
   }
@@ -681,15 +697,7 @@ export async function repayInvoice(
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
     if (!settled) return inFlight(id);
-
-    const updated = await db
-      .update(invoices)
-      .set({ status: "repaid" })
-      .where(and(eq(invoices.id, id), eq(invoices.status, "disbursed")))
-      .returning({ id: invoices.id });
-    if (updated.length === 0) {
-      return { error: "Payment booked but the deal moved concurrently — check the ledger view." };
-    }
+    // Advanced by completeSettlement — see advanceFromBookedLegs.
   } catch (err) {
     return { error: asMessage(err) };
   }
@@ -722,21 +730,6 @@ async function overdueFor(db: Db, inv: typeof invoices.$inferSelect) {
       residualMinor: snapshot.supplierResidualMinor,
     }),
   };
-}
-
-/** Both back-half legs booked → the deal is settled. Order-independent. */
-async function maybeSettle(db: Db, invoiceId: string) {
-  const events = await db
-    .select({ type: settlementEvents.type })
-    .from(settlementEvents)
-    .where(eq(settlementEvents.invoiceId, invoiceId));
-  const kinds = new Set(events.map((e) => e.type));
-  if (kinds.has("payout") && kinds.has("residual")) {
-    await db
-      .update(invoices)
-      .set({ status: "settled" })
-      .where(and(eq(invoices.id, invoiceId), eq(invoices.status, "repaid")));
-  }
 }
 
 export async function payoutFunder(
@@ -782,7 +775,8 @@ export async function payoutFunder(
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
     if (!settled) return inFlight(id);
-    await maybeSettle(db, id);
+    // Payout and residual settle the deal only together, in either order —
+    // now decided by advanceFromBookedLegs, beside the booking.
   } catch (err) {
     return { error: asMessage(err) };
   }
@@ -823,7 +817,8 @@ export async function payResidual(
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
     if (!settled) return inFlight(id);
-    await maybeSettle(db, id);
+    // Payout and residual settle the deal only together, in either order —
+    // now decided by advanceFromBookedLegs, beside the booking.
   } catch (err) {
     return { error: asMessage(err) };
   }

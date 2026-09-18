@@ -5,6 +5,7 @@ import { Amount } from "@/components/ui/amount";
 import { invoiceDetail, movementsForInvoice, accountRefsFor } from "@/lib/queries";
 import { PayInvoiceForm } from "@/components/pay-invoice-form";
 import { repaymentEntries } from "@/lib/deals/preview";
+import { railFor } from "@/lib/rails";
 import { daysLateBetween } from "@/lib/pricing/overdue";
 
 export const dynamic = "force-dynamic";
@@ -100,9 +101,14 @@ export default async function PayPage({ params }: PageProps<"/pay/[invoiceId]">)
                 onChain={invoice.rail === "usdc"}
               />
               <p className="mt-2.5 text-[12px] text-muted">
+                {/* Three rails, three truths. A two-way branch here told a
+                    debtor on the fiat rail that payment was simply "recorded",
+                    which is the one thing an asynchronous rail never does. */}
                 {invoice.rail === "usdc"
                   ? "Pays in testnet USDC from the debtor demo wallet. Nothing is recorded until the transfer is verified on-chain."
-                  : "Records payment against this invoice."}{" "}
+                  : railFor(invoice.rail).settlement === "deferred"
+                    ? "Initiates payment on the fiat rail. Nothing is recorded until Circle confirms it — usually minutes — and the deal does not advance in the meantime."
+                    : "Records payment against this invoice."}{" "}
                 Exact amount only — a part payment is refused until the reconciliation cycle
                 handles it.
               </p>
