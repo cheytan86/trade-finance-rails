@@ -350,6 +350,30 @@ describe.skipIf(!HAS_DB)("one leg is never in flight twice", () => {
     expect(row.status).toBe("failed");
   });
 
+  // Deploy, 2026-09-18. The webhook route decides "did THIS delivery book it?"
+  // from eventId, and labels the row `applied` or `ignored` accordingly. That
+  // distinction is the only thing that lets the records answer whether money
+  // was booked by a webhook or by a person — so it is pinned here, at the
+  // source, rather than trusted.
+  it("a booking returns its event id; a duplicate returns none", async () => {
+    const invoiceId = await anInvoice();
+    const rail = () => instantRail("demo:once");
+
+    const first = await settleLeg(db, spec(invoiceId), rail);
+    expect(first.status).toBe("settled");
+    // THIS call booked it, and says so.
+    expect((first as { eventId: string }).eventId).not.toBe("");
+
+    // The same leg, delivered again — settled, but booked by nobody new.
+    const [row] = await pendingRowsFor(invoiceId);
+    const again = await completeSettlement(db, row.id, rail);
+    expect(again.status).toBe("settled");
+    expect((again as { eventId: string }).eventId).toBe("");
+
+    // And still exactly one movement, which is the point of the distinction.
+    expect(await countEvents(invoiceId)).toBe(1);
+  });
+
   it("the in-flight key is the SAME key the ledger uses — one guard, not two", () => {
     expect(idempotencyKeyFor("disbursement", "abc")).toBe("disbursement:abc");
   });

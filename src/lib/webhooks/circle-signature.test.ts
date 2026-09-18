@@ -195,7 +195,8 @@ describe("the SNS canonical string — rebuilding exactly what was signed", () =
   });
 
   it("REFUSES to guess when a signed field is missing", () => {
-    const { Timestamp: _dropped, ...missing } = notification;
+    const missing: Record<string, unknown> = { ...notification };
+    delete missing.Timestamp;
     expect(snsCanonicalString(missing)).toBeNull();
   });
 
@@ -246,7 +247,8 @@ describe("the SNS verifier refuses before it fetches anything", () => {
   });
 
   it("refuses when there is no signature at all", async () => {
-    const { Signature: _none, ...unsigned } = base;
+    const unsigned: Record<string, unknown> = { ...base };
+    delete unsigned.Signature;
     await expect(
       verifySnsSignature({ ...unsigned, SigningCertURL: "https://sns.us-east-1.amazonaws.com/c.pem" }, noFetch),
     ).resolves.toBe(false);

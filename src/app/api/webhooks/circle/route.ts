@@ -41,6 +41,13 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("fiat rail disabled", { status: 404 });
   }
 
+  // WHEN IT ARRIVED — taken first, before any work. The row used to get its
+  // timestamp from defaultNow() at INSERT, which happens AFTER the booking, so
+  // a delivery that booked something always appeared to arrive a second after
+  // the thing it caused. At Deploy that made an unattended settlement
+  // impossible to prove from the records alone (2026-09-18).
+  const receivedAt = new Date();
+
   // RAW BYTES FIRST, always — the record is of what was sent, not of what we
   // made of it. WHICH SCHEME verifies it depends on what the delivery carries:
   // a header-signed delivery is verified against the raw bytes; an SNS
@@ -51,7 +58,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const verdict = await verifyDelivery(request.headers, rawBody);
   if (!verdict.valid) {
-    await record(rawBody, false, "refused-signature", null, null);
+    await record(rawBody, false, "refused-signature", null, null, receivedAt);
     // 403, not 200: a legitimate delivery whose key fetch failed SHOULD be
     // retried by the sender. A forgery retrying costs nothing but a log line.
     return new Response("signature refused", { status: 403 });
@@ -64,7 +71,7 @@ export async function POST(request: Request): Promise<Response> {
     try {
       body = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
-      await record(rawBody, true, "unmatched", null, null);
+      await record(rawBody, true, "unmatched", null, null, receivedAt);
       return new Response("unparseable body", { status: 400 });
     }
   }
@@ -74,11 +81,11 @@ export async function POST(request: Request): Promise<Response> {
     if (!isTrustedSubscribeUrl(body.SubscribeURL)) {
       // A URL that arrives in a request body is not a URL to fetch. Refusing
       // an unexpected host is what stops this endpoint becoming a proxy.
-      await record(rawBody, true, "refused-signature", null, null);
+      await record(rawBody, true, "refused-signature", null, null, receivedAt);
       return new Response("untrusted SubscribeURL", { status: 400 });
     }
     await fetch(body.SubscribeURL, { method: "GET" });
-    await record(rawBody, true, "applied", null, null);
+    await record(rawBody, true, "applied", null, null, receivedAt);
     return new Response("subscription confirmed", { status: 200 });
   }
 
@@ -108,7 +115,7 @@ export async function POST(request: Request): Promise<Response> {
     // Authentic, well-formed, and about nothing we are waiting for. Recorded
     // as unmatched — the first real instance of cycle 3's unmatched-reference
     // exception — and acknowledged so the sender stops retrying.
-    await record(rawBody, true, "unmatched", reference, null);
+    await record(rawBody, true, "unmatched", reference, null, receivedAt);
     return new Response("no matching settlement", { status: 200 });
   }
 
@@ -124,12 +131,20 @@ export async function POST(request: Request): Promise<Response> {
       revalidatePath("/funder");
       revalidatePath(`/pay/${row.invoiceId}`);
     }
+    // APPLIED means THIS delivery booked it. completeSettlement returns an
+    // empty eventId when the leg was already resolved — a duplicate, which the
+    // schema's own enum has always called `ignored`. Labelling both `applied`
+    // meant the records could not answer "did a webhook book this, or did a
+    // person?", which is the one question a claim of unattended settlement
+    // rests on. Found at Deploy, 2026-09-18.
+    const bookedByThisDelivery = outcome.status === "settled" && outcome.eventId !== "";
     await record(
       rawBody,
       true,
-      outcome.status === "settled" ? "applied" : "ignored",
+      bookedByThisDelivery ? "applied" : "ignored",
       reference,
       row.id,
+      receivedAt,
     );
   }
 
@@ -174,12 +189,14 @@ async function record(
   outcome: Outcome,
   externalId: string | null,
   resolvedPendingId: string | null,
+  receivedAt: Date,
 ): Promise<void> {
   try {
     await getDb()
       .insert(webhookDeliveries)
       .values({
         source: "circle",
+        receivedAt,
         externalId,
         signatureValid,
         rawBody: rawBody.slice(0, 20_000),

@@ -252,8 +252,8 @@ real rather than asserted.
 
 ## The findings this deployment produced
 
-1. **`applied` cannot distinguish "I booked this" from "this was already
-   booked".** `completeSettlement` returns `settled` in both cases and the
+1. **FIXED (commit follows). `applied` could not distinguish "I booked this"
+   from "this was already booked".** `completeSettlement` returns `settled` in both cases and the
    route labels both `applied`. Worse, `webhook_deliveries.received_at` is
    populated when the row is written — AFTER the booking — so it is a
    recorded-at, not a received-at, and a delivery that books something always
@@ -261,8 +261,22 @@ real rather than asserted.
    system cannot prove, from its own records, whether money was booked by a
    webhook or by a human.** For a product whose headline claim is unattended
    settlement, and whose ledger is meant to be auditable, that is a real gap.
-   It is why the repayment above is recorded as ambiguous. **Fix before
-   Release.**
+   It is why the repayment above is recorded as ambiguous.
+
+   **Fixed the same day, and it needed no schema change** — which is itself the
+   finding. `webhook_outcome` has documented `ignored` as "authentic and
+   matched, but the leg was already resolved — a duplicate delivery" since it
+   was written. The schema said the right thing and the route did not do it;
+   the same described-but-not-performed shape as FIX 3. `completeSettlement`
+   already returned an empty `eventId` on both duplicate paths, so the signal
+   existed too — it was simply thrown away. The route now labels `applied`
+   only when the delivery actually booked, and takes `receivedAt` before any
+   work rather than letting the column default at INSERT.
+
+   The evidence in this file was gathered BEFORE that fix, so the legs above
+   stay recorded as ambiguous. Re-running the walkthrough would produce
+   unambiguous records; it has not been re-run, and this file does not pretend
+   otherwise.
 
 2. **A refused delivery is never retried into success.** SNS gave up on the
    09:50 notification; it never came back after the fix deployed. So a wrong
