@@ -51,6 +51,20 @@ card and its full result; funding requires a priced deal) → **settlement**
 Overdue-ness is a display condition off the due date, not a state.
 Reconciliation holds and reversals arrive with cycle 3.
 
+**[cycle 2] Settlement is asynchronous, and the state machine did not change
+to absorb it.** On the fiat rail a gate INITIATES a movement and Circle
+confirms it later. Between those two moments the money has left, nothing is
+booked, and the deal has not advanced — being in flight is a display
+condition, exactly as overdue-ness is, and `src/lib/domain/states.ts` stayed
+byte-identical through the cycle to prove it. Balances are unchanged while a
+leg is in flight: **in-flight money is not money.** A leg is finished by a
+signed webhook from Circle or by an operator pressing Check status; both run
+the same booking path, which re-reads the rail's own record and never believes
+what it was told. Two limits this leaves open, both cycle 3's: an inbound
+payment is recognised by amount and arrival rather than by an id, so two
+identical amounts in flight together are a named refusal; and the repayment
+date recorded is the moment of confirmation, not of payment.
+
 Money legs (paper §5–§7): financing · disbursement · repayment · payout ·
 residual, plus the conversion legs 2a/3a in hybrid mode. Priority of payments:
 funder principal first, supplier residual absorbs shortfall. Premium and fees

@@ -1,6 +1,9 @@
 # Design — Fiat rail (Circle sandbox)
 
 Date: 2026-09-15 · From: `docs/product/circle-fiat/discovery.md` · Cycle 2 · FULL track
+**Amended 2026-09-18** — three fixes added during Develop, and one open
+decision recorded rather than defaulted. See "Scope added during Develop" at
+the end; this design describes what was actually built.
 
 ---
 
@@ -646,3 +649,98 @@ a structural one, and the design does not guess it.
    inbound wire — and by which route — is determined at A0 and recorded in
    `STACK_RULES.md`. If it cannot, that is a scope conversation before A1,
    not an improvisation during A4.
+
+
+---
+
+## Scope added during Develop (2026-09-18)
+
+Three defects found by **using** the product during case 1's walkthrough, none
+of them declared at design time, all repaired on this branch. They are
+recorded here rather than absorbed into the build, because a design that does
+not describe what was built stops being a design.
+
+Two of the three predate this cycle. Asynchrony did not cause them; it caused
+somebody to look closely at a payout and a pricing form.
+
+### FIX 3 — discounting, not lending
+
+The pricing screen has rendered "Funder pays in — principal less their return"
+since cycle 0. The funding gate moved the full principal and repaid principal
+plus interest at payout. Two conventions for one deal: the screen described
+discounting, the ledger performed lending. The return and the platform margin
+were identical either way, so nothing was mispriced — but the screen was the
+half telling the truth about the product.
+
+**Decided (Chetan): discounting.** The funder pays in principal less their
+return and is repaid the principal; only the overdue share is added at payout,
+because extra days cannot be discounted up front. No pricing arithmetic
+changed — `funderFinancingMinor` was already computed and already displayed.
+
+It makes §4's segregation claim stronger, and the test now asserts the stronger
+form: **client money after funding and disbursement is exactly zero.** Cycle 1
+swept the whole principal and parked the return in `fee_income`; FIX 2 held it
+as client money; neither is needed if the return never arrives.
+
+### FIX 4 — the money boundary
+
+`src/lib/money/` is on the untouchable list. Chetan lifted it for this.
+
+`.1` was refused — a leading point is an ordinary way to write ten cents.
+Worse, and unreported because nothing complained: every comma was stripped as
+a thousands separator, so a **decimal comma silently multiplied an amount by
+ten**. A comma is now a separator only when it groups three digits properly;
+anything else is a named refusal. Thousands are untouched.
+
+Alongside it: React 19 resets an uncontrolled form once its action returns,
+*including on a refusal* — so a rejected fee reset the settlement rail to
+`demo-internal`, and the natural next move is to fix the typo and resubmit on
+the wrong rail. The pricing form is controlled now.
+
+### FIX 5 — an inbound payment could be matched to another deal's deposit
+
+The one that lost money. A repayment was matched to a deposit that had settled
+a different invoice an hour earlier; the ledger's uniqueness guard refused the
+booking, correctly; the refusal was read as "this leg is already done"; the leg
+was marked settled and nothing booked.
+
+Two causes, both repaired:
+
+- **The inbound window ran from `now`**, so it reached backwards past the leg's
+  own beginning and grew the longer you waited. `TransferRequest` gains
+  `initiatedAt`, resolved by the caller from the pending row. This is an
+  addition to the seam's own contract and is therefore design, not repair: a
+  rail that recognises money by *arrival* must be told when the leg began.
+- **`ledger-already-recorded` was read as "settled" without checking whose
+  movement existed.** It now means settled only when a movement for *this* leg
+  is present; evidence owned by another leg is a named reconciliation
+  exception pointing at cycle 3.
+
+This is §7's error handling extended by a case §7 did not imagine: not a rail
+failing, but a rail answering about somebody else's money.
+
+## Open decisions, recorded rather than defaulted
+
+**1 · The eval plan's case 5(b) wording.** It reads "leaves a durable
+**pending** row". A3's three-outcome `verify` later made a throwing `verify`
+*fail* the leg — a mismatch must stay loud. The row is durable and carries the
+reference either way, so FIX 1 holds; the word `pending` no longer does.
+Graded PARTIAL in `evals.md` rather than re-graded here. **Chetan's call:**
+amend to "durable row", or leave the partial standing as a record of the
+drift.
+
+**2 · Which moment is the repayment date.** Today the ledger records when
+Circle confirmed. The debtor discharged their obligation when their bank sent
+the money — `pending_settlements.initiated_at` is the closer proxy, and the
+real answer is the value date, which we do not hold. Immaterial in a sandbox
+where confirmation takes seconds; material when a wire takes three days and
+overdue interest is borne by the supplier's residual. Touches cycle 3's
+reconciliation scope. **Undecided.**
+
+**3 · A confirmation step between pricing and funding.** Chetan's feedback
+during case 1: pricing applies immediately and Fund becomes available at once;
+there should be an explicit "these terms are correct" gate first. Not built,
+deliberately — a real gate needs a state, and `src/lib/domain/states.ts`
+staying byte-identical is this cycle's verified central claim; a client-side
+confirmation would be a courtesy dressed as a control. Lands naturally at
+cycle 6, where pricing becomes read-only and the signed grid applies.

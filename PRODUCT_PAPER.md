@@ -539,6 +539,28 @@ the platform a de-facto custodian of money in transit, and the demonstration
 is deliberately **not** bankruptcy-remote — §10 Q18 prices the structures a
 real programme would layer on, and names the one the demo can actually show.
 
+**[cycle 2, 2026-09-18] How much money in transit, corrected downward — twice.**
+The claim above was written assuming the platform holds the funder's return
+between funding and payout. It does not, and the correction went in two steps.
+First the ledger was found already to separate client money from platform
+funds, so the repair was a rename and a declared classification rather than
+the split the discovery had assumed. Then the funding convention itself was
+corrected: the funder **buys the receivable at a discount**, paying in the
+principal less their own return and being repaid the principal. Their return
+is therefore never handed to the platform at all, and client money empties to
+exactly zero after each stage of the deal rather than carrying a balance owed
+to somebody else. The custodial exposure is real and still not bankruptcy-
+remote — but it is the money in transit between two parties, and never a
+party's earnings sitting in a platform account waiting to be given back.
+
+**Settlement is also no longer instantaneous, and that widens the window the
+paragraph above is about.** A fiat leg is initiated and confirmed minutes or
+days later; money has left the sender and not arrived at the recipient, and
+the platform's record of it is a pending row rather than a ledger entry. The
+demonstration books nothing until the rail's own record confirms, so balances
+never overstate — but the transit window is now a thing with a duration, and
+§10 Q18's structures are what a real programme puts around it.
+
 ### Credit insurance — the insured variant
 
 Funders expect it, and §3 says why: many mandates cannot hold unrated SME-debtor

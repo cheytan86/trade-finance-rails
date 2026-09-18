@@ -9,14 +9,18 @@ No model calls anywhere in this feature: **these evals cost nothing to run** —
 except $2.00 of testnet USDC, which is worthless by construction, and three
 sandbox payouts denominated in money Circle invented.
 
-**Verdicts so far: 3 pass · 1 partial · 1 not yet run.** No percentage is
-quoted, because case 1 is ungraded — it is witnessed through the UI, and that
-walkthrough has not happened yet. A score computed over four of five cases
-would be a score of the four that were easy to reach.
+**Verdicts: 4 pass · 1 partial · 0 fail.** The partial is case 5(b), and it
+is a partial on *wording*, not on behaviour — recorded below rather than
+quietly re-graded.
+
+The number that matters more is a different one: **walking case 1 by hand
+found six defects that 175 passing tests did not.** One of them lost a real
+payment. They are listed after the cases, because they are the most valuable
+thing this eval run produced.
 
 | # | Case | Verdict | How it was run |
 |---|---|---|---|
-| 1 | Happy path — five legs settle asynchronously | **not yet run** | UI walkthrough (Chetan) |
+| 1 | Happy path — five legs settle asynchronously | **PASS** | UI walkthrough (Chetan) |
 | 2 | A forged delivery is refused | **PASS** | real HTTP, `replay-circle-webhook.mts` |
 | 3 | Duplicate and out-of-order delivery converge | **PASS** | `eval-circle-fiat.mts` |
 | 4 | Circle reports failure | **PASS** | `eval-circle-fiat.mts` |
@@ -28,22 +32,61 @@ would be a score of the four that were easy to reach.
 
 **Expected:** all legs initiated on `circle-fiat`, each visibly in flight, each
 settled by a signed webhook; distinct Circle references per leg; every
-movement's entries sum to zero; the pinned overdue example still reproduces to
-the cent (22.22 / 20.00 / 2.22).
+movement's entries sum to zero.
 
-**Verdict: NOT YET RUN.** Deliberately not automated. Cycle 0's happy-path
-evidence is "Chetan's own walkthrough, not a fixture", and cycle 1's is five
-real transaction hashes from a deal carried through the UI. A harness driving
-the settlement module is not evidence that a *deal completes* — it is evidence
-that the module works, which cases 3, 4 and 5 already establish. The
-walkthrough is the eval.
+**Verdict: PASS.** Walked by Chetan through the UI on 2026-09-18, against
+commit `41787cf`. Deliberately not automated: cycle 0's happy-path evidence is
+"Chetan's own walkthrough, not a fixture", and cycle 1's is five real
+transaction hashes from a deal carried through the screens. That standard
+earned itself this cycle — the walkthrough found six defects the suite could
+not (below).
 
-Prerequisites verified 2026-09-18 and all green: Circle sandbox balance
-$50,000.50; one registered wire account (Wells Fargo ****0010, `complete`);
-the platform destination row present, with supplier and funder resolving to it
-by design — the platform stands in for the counterparties' banks exactly as
-the four demo wallets do on USDC, and every surface rendering an inbound fiat
-leg says so.
+Invoice `61fc99df`, face **135.00**, 28-day tenor, priced 85% advance / 9.50%
+supplier / 8.00% funder / 0.10 fixed:
+
+```text
+leg            amount     evidence
+funding        114.04     circle-payment-id 42c99f13…
+disbursement   113.80     circle-payment-id 2d5e2cab…
+repayment      135.00     circle-payment-id ba4ce03b…
+payout         114.75     circle-payment-id 84049c8d…
+residual        20.25     circle-payment-id 70653a82…
+
+five legs · five DISTINCT references · every movement Σ = 0 · status `settled`
+```
+
+Every party nets exactly what the deal promised, checked against the locked
+snapshot rather than against the run:
+
+```text
+                                    actual     expected
+funder_cash · Northgate              +0.71        +0.71   (114.75 × 8% × 28/360)
+platform_operating                   +0.24        +0.24   (the spread)
+supplier_payable · Amber           +134.05      +134.05   (135.00 − 0.71 − 0.24)
+debtor_cash · Meridian             −135.00      −135.00   (face, exactly)
+client_collections                    0.00         0.00   a conduit, never a beneficiary
+```
+
+**Funding moved 114.04, not 114.75** — principal less the funder's own return.
+That is FIX 3 visible in the ledger: the funder buys the receivable at a
+discount and is repaid the principal.
+
+**`client_collections` nets to zero and returns to zero at every stage.** The
+platform never holds a cent of the funder's return, because under discounting
+it never receives it. That is the segregation claim demonstrated rather than
+asserted, and it is stronger than the claim FIX 2 was written to defend.
+
+**What this run did NOT cover.** The pinned overdue example (22.22 / 20.00 /
+2.22) needs a past-due deal; this one is due 2026-10-16 and settled early, so
+the overdue path never ran. It stands on cycle 1's evidence, which exercised
+it on the USDC rail, and the arithmetic is rail-independent — but on this rail
+it is untested, and that is a limitation, not a pass.
+
+Legs settled by a mix of signed webhook replay and the operator's Check-status
+control. Both go through `completeSettlement`, the one booking path, so the
+ledger cannot tell them apart — but only the webhook route exercises signature
+verification and the SNS envelope on a *successful* delivery, and not every leg
+took that route.
 
 ---
 
@@ -189,6 +232,52 @@ as PARTIAL rather than quietly re-graded, because the honest resolution is a
 **design amendment** — "durable pending row" becomes "durable row" — and that
 is Chetan's call to make in `design.md`, not something an eval run should
 decide about its own success criteria.
+
+---
+
+## The six defects the walkthrough found, and the tests did not
+
+Every one was found by a person using the product. None was catchable by the
+suite, and the reason is the same in all six cases: **they did not live inside
+a unit. They lived at the seam between units** — which is exactly where a
+cycle that splits "the request" from "the booking" creates new ground.
+
+| # | Defect | Found | What it did |
+|---|---|---|---|
+| 1 | The fiat rail was selectable but not reachable | pricing a deal | choice silently stored as `demo-internal` |
+| 2 | Three screens described the wrong rail | reading the deal page | a fiat deal called "demo-internal"; a fiat debtor told payment is "recorded" |
+| 3 | A confirmed deal never advanced | funding a deal | money booked, deal frozen at `priced` — the fiat rail could not complete a deal at all |
+| 4 | Discounting was described but not performed | reading a payout | funder paid par and was repaid par + interest, contradicting the pricing screen |
+| 5 | `.1` refused; `0,1` silently ×10 | typing a fee | a decimal comma became a tenfold pricing error, with no warning |
+| 6 | A repayment was lost | paying an invoice | deposit matched to another invoice's; refusal misread as "already done"; leg marked settled with nothing booked |
+
+Three observations worth keeping.
+
+**Defect 6 is FIX 1 wearing a different coat.** The whole cycle exists because
+money could move without a record. FIX 1 closed that between `execute` and
+`verify`. Defect 6 reopened it one step later — between `verify` and the
+booking — through a door FIX 1 was not watching. A guarantee is only as wide
+as the path you checked.
+
+**The most instructive was defect 6's root cause.** `matchInboundDeposit`
+already had a passing test named *"ignores a deposit that landed BEFORE we
+asked for the money."* The function was correct the entire time. It passed
+because the test handed it the right timestamp and production handed it a
+sliding one. A correct function, called incorrectly — and no unit test can see
+that, because each unit is fine.
+
+**Defects 1 and 4 were both two-copies-of-one-rule.** A two-rail ternary
+copied into four places, and a pricing convention stated on screen but
+performed differently in the ledger. Both were repaired by deriving from one
+source — the rail registry, and `funderFinancingMinor`. The registry's own
+header had promised since cycle 1 that adding a rail "means adding a line here
+and nothing else"; that promise held for `railFor` and was quietly false at
+every other site that decided.
+
+All six are repaired, with regression tests where a test can express the
+claim (179 now, from 175). Defect 6's root cause needed a rail-interface
+change — `TransferRequest.initiatedAt` — because a rail that recognises money
+by arrival has to be told when the leg began.
 
 ---
 

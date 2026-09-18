@@ -239,6 +239,38 @@ A6       The screens. The in-flight strip (the cycle's one new pattern, and the
          The ledger shows both subtotals; fee_income renders NOWHERE, because
          it is retired and holds nothing.
 
+SECTION D  2026-09-18, commit 41787cf. Reconciled against
+         `git diff --name-only feat/settlement-usdc` — 51 files, 12 commits.
+         Every file accounted for by the contract EXCEPT TWO, recorded rather
+         than explained away (the diff is the truth; the manifest explains it):
+           .gitignore — one line (.replay-key.pem), never declared. The key is
+             a throwaway generated locally and must not be committed; the
+             entry is correct and the omission was in the manifest.
+           src/components/check-status-button.tsx — a new file the design's
+             new-files list does not name. The design put the control inside
+             in-flight-strip.tsx; it became its own client component because
+             the strip is server-rendered and the control needs an action.
+             The split is right; the manifest should have said so at A6.
+         FINAL GATE: tsc 0 · lint 0 · 179 tests/16 files · build ✓ 9 routes.
+         FLAG-OFF PROVED, not asserted: built AND served with the flag absent
+         from the environment entirely — build succeeds (absent is off, never
+         an error), the webhook door answers 404 "fiat rail disabled", zero
+         circle-fiat options render, and all five host surfaces still 200.
+         SMOKE PATH: spine 20/20 against the real database; the public debtor
+         page 200 on both a demo-internal and a fiat deal; zero balance
+         columns in the schema — balances are still SUM over ledger_entries.
+         DATA BOUNDARY: no db import anywhere under src/lib/rails (the seam
+         stays framework-free); 0 SAND_ keys in source; .env never committed;
+         the two 0x+64hex literals are a cycle-1 transaction hash and the
+         published Anvil test key, neither a credential.
+         Evidence: docs/product/circle-fiat/develop.md (8 rows) + evals.md.
+         Design amended with FIX 3, 4, 5 and three open decisions.
+         Cycle-close docs updated: YOUR_PRODUCT.md re-audited (8 pages, 1
+         route handler, 16 test files/179 tests, 9 tables, 7 migrations, 3
+         rails), PRD.md (async settlement), PRODUCT_PAPER.md (custody window
+         corrected downward twice), DESIGN_SYSTEM_NOTES.md (the in-flight
+         strip; the third provenance treatment). STACK_RULES.md was done at A0.
+
 FIX 5 — THE ONE THAT ACTUALLY LOST MONEY (found live at case 1, 2026-09-18).
          Chetan paid a $100 repayment. The pending row said settled, no
          movement was booked, and the deal stayed at `disbursed`. The money
