@@ -18,6 +18,28 @@ describe("parseDecimalToMinor — the only door human-typed money comes through"
   it("refuses rather than rounds when the precision does not fit", () => {
     expect(() => parseDecimalToMinor("48000.005")).toThrowError(/decimal places/);
   });
+
+  // FIX 4, 2026-09-18 — both found by pricing a deal by hand, not by reading.
+  it("accepts a leading point: '.1' is ten cents, not a typo", () => {
+    expect(parseDecimalToMinor(".1")).toBe(10n);
+    expect(parseDecimalToMinor(".50")).toBe(50n);
+    expect(parseDecimalToMinor("-.5")).toBe(-50n);
+    // and it still agrees with the way most people write the same amount
+    expect(parseDecimalToMinor(".1")).toBe(parseDecimalToMinor("0.10"));
+  });
+
+  it("REFUSES a decimal comma instead of silently multiplying by ten", () => {
+    // The defect this replaces: every comma was stripped as a thousands
+    // separator, so "0,1" meaning ten cents parsed as one dollar and "1,5"
+    // meaning a dollar fifty parsed as fifteen — wrong money, no warning.
+    for (const ambiguous of ["0,1", "1,5", "1,50", "12,3"]) {
+      expect(() => parseDecimalToMinor(ambiguous)).toThrowError(/point, not a comma/);
+    }
+    // Real thousands separators are untouched: the rule is grouping, not the
+    // character.
+    expect(parseDecimalToMinor("48,000.00")).toBe(4_800_000n);
+    expect(parseDecimalToMinor("1,234,567.89")).toBe(123_456_789n);
+  });
   it("refuses junk with a sentence naming the field", () => {
     expect(() => parseDecimalToMinor("", 2, "Face value")).toThrowError(/Face value/);
     expect(() => parseDecimalToMinor("1e5")).toThrowError(MoneyError);

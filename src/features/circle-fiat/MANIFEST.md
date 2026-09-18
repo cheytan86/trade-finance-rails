@@ -239,6 +239,125 @@ A6       The screens. The in-flight strip (the cycle's one new pattern, and the
          The ledger shows both subtotals; fee_income renders NOWHERE, because
          it is retired and holds nothing.
 
+FIX 3 — DISCOUNTING, NOT LENDING (Chetan's decision, 2026-09-18). A SCOPE
+         ADDITION made during Develop, recorded here rather than absorbed; it
+         belongs in design.md at cycle close, as cycle 1's 2026-09-09 amendment
+         did.
+         FOUND BY CHETAN reading the payout: "why 85.53 instead of 85?" The
+         pricing screen has said "Funder pays in — principal less their return"
+         since cycle 0, and rendered 84.47. The funding gate moved 85.00. Two
+         conventions for one deal: the screen described discounting, the ledger
+         performed lending. Same return, same platform margin, and neither was
+         mispriced — but the screen was the half telling the truth about the
+         product, and the money was doing something else.
+         DECIDED: discounting. The funder pays in principal LESS their return
+         and is repaid the principal. Their 0.53 is never handed to us, so it
+         cannot be mislaid, mis-segregated, or paid back out of client money.
+         CHANGED: fundingEntries + fundInvoice move funderFinancingMinor;
+         payoutEntries + payoutFunder repay principalMinor plus ONLY the
+         overdue share — extra days cannot be discounted up front, so that
+         part is still genuinely paid at payout. No pricing arithmetic was
+         touched: funderFinancingMinor was already computed and already shown.
+         THE SEGREGATION CLAIM GOT STRONGER, and the test now says so: client
+         money after funding and disbursement is EXACTLY ZERO. Cycle 1 swept
+         the whole principal and parked the return in fee_income; cycle 2 held
+         it as client money (FIX 2); neither is needed if it never arrives.
+         5 pinned tests updated — preview.test.ts ×4 and spine.integration
+         case 6 — each re-asserting the new claim rather than the new number.
+         CONSEQUENCE FOR THE EVAL: both fiat deals funded under the old rule
+         (b83f7902, c495c56f) are now INCONSISTENT — continuing either would
+         strand 0.53 in client money forever. Case 1 restarts on a fresh deal.
+
+FOUND LIVE AT CASE 1, AND THE WORST OF THE THREE — A CONFIRMED DEAL NEVER
+         ADVANCED. Chetan funded a fiat deal: the leg went in flight, the rail
+         confirmed, the movement booked with a circle-payment-id — and the
+         invoice stayed `priced`. Fund still offered, Disburse still refused.
+         CAUSE: the status advance lived in the REQUEST, not beside the
+         booking. Cycles 0 and 1 could not tell the difference, because on an
+         immediate rail the gate press and the booking are one moment. On a
+         deferred rail they are hours apart, and all three async completion
+         paths — the webhook route, checkSettlementStatus, and a later
+         re-verify — called completeSettlement and touched no status at all.
+         So on the fiat rail NO leg ever advanced a deal: the rail worked, the
+         ledger was right, and the deal could never finish. Cycle 2's headline
+         promise — "the deal does not advance until it confirms" — has to mean
+         it advances WHEN it confirms, and it did not.
+         FIX: advanceFromBookedLegs() in pending.ts, called wherever a leg
+         ends settled. Derived from BOOKED MOVEMENTS, not from the completion
+         that triggered it — which is what makes it REPAIR rather than merely
+         record: a deal already stuck, whose pending row is settled and whose
+         completion will never fire again, advances the next time anything
+         touches it. Forward-only, CAS'd on the status read, so a replayed
+         webhook cannot walk a deal backwards.
+         The four per-gate CAS blocks were REMOVED, not left beside it: they
+         would have found `funded` where they expected `priced` and reported a
+         false conflict on every synchronous deal. maybeSettle() deleted for
+         the same reason — a second copy of one rule is what caused all three
+         of today's defects.
+         THE PRICING SNAPSHOT MOVED, and this is the subtle half: it was
+         written in the same statement as the status, so on a deferred rail it
+         was never written at all. It now locks at the GATE PRESS, before the
+         money is instructed — a tenor that shrinks while a leg is in flight
+         must never move a deal that was already funded on the old one.
+         VERIFIED BOTH WAYS: Chetan's stuck deal c495c56f repaired priced →
+         funded through the Check-status path; a throwaway demo-internal deal
+         still advances priced → funded synchronously (the path the removed
+         CAS used to serve). Gate green: tsc 0 · lint 0 · 175/175 · build ✓.
+
+FOUND LIVE AT CASE 1 — THE THIRD RAIL WAS SELECTABLE BUT NOT REACHABLE.
+         Chetan picked "Fiat · Circle sandbox" at pricing and the deal came
+         back demo-internal. Cause: cycle 1's two-rail ternary, copied in FOUR
+         places that A6 never widened —
+           actions.ts:399          `=== "usdc" ? "usdc" : "demo-internal"`
+                                   SILENTLY stored the wrong rail
+           ops/deals/[id]:201      displayed "demo-internal" for a fiat deal
+           ops/deals/[id]:451      the gate note claimed the wrong mechanism
+           pay/[invoiceId]:103     told a fiat debtor payment is "recorded" —
+                                   the one thing an async rail never does
+         All four now derive from the REGISTRY (railFor / ALL_RAILS), so
+         cycle 11's rails need no edit here — the promise rails/index.ts has
+         made since cycle 1, finally true at every site that decides.
+         An unknown rail is now a NAMED REFUSAL, not a substitution, and the
+         flag is checked SERVER-SIDE at pricing as the design said it was: a
+         select rendered without the option is a courtesy, not a control.
+         VERIFIED LIVE: b83f7902 renders "rail: Fiat · Circle sandbox (no real
+         money)"; two deals now store rail=circle-fiat.
+         175 TESTS PASSED WITH THIS DEFECT LIVE — the form→action boundary has
+         no test. Recorded as a limitation, not patched over.
+         THE CLASS MATTERS: the system did something other than what was asked
+         and said nothing. That is FIX 1's shape, in the UI instead of the
+         ledger, and it was found by USING the product, not by reading it.
+
+SECTION C  Evals, 2026-09-18. 3 pass · 1 partial · 1 not yet run — no
+         percentage quoted while case 1 is ungraded.
+           case 2  PASS, real HTTP: forged and unsigned deliveries both 403,
+                   ledger byte-identical, two refusal rows with external_id
+                   NULL — refused before the body was parsed for meaning.
+           case 3  PASS: duplicate ×3 books once; a completion delivered
+                   BEFORE its pending sibling produces an identical ledger.
+           case 4  PASS: Circle's own failure reason carried, nothing booked,
+                   the retry creates a NEW row and the failed one survives.
+           case 5a PASS: balances unchanged in flight.
+           case 5b PARTIAL: run against the REAL usdc rail with a REAL Base
+                   Sepolia broadcast (0xaf10ec6f…, block 46971837, funder
+                   19.03 → 17.03). The money moved, verify was made to fail,
+                   and the durable row survived carrying the hash — FIX 1
+                   proved where the defect actually lived. PARTIAL only
+                   because the case says "durable PENDING row" and A3 later
+                   made a throwing verify FAIL the leg. Wording drift,
+                   recorded for Chetan's decision, not re-graded quietly.
+           case 1  NOT RUN — the UI walkthrough, deliberately not automated.
+         Evidence: docs/product/circle-fiat/evals.md.
+
+ALLOW-LIST AMENDMENT 25 — scripts/eval-circle-fiat.mts (approved 2026-09-18,
+         Chetan). A new file the design's contract does not name. Cases 3, 4
+         and 5b need timing no human can hit by hand: a duplicate delivery, a
+         completion arriving before its sibling, and a real broadcast followed
+         by a failed verify. It drives the settlement module rather than the
+         server actions (those need a Next request context), creates only
+         throwaway invoices, and deletes every row it made — the ledger is 12
+         entries Σ 0 before and after. Case 1 was deliberately left OUT of it.
+
 FOUND LIVE AT A6 — a Circle mock wire has a $2.00 minimum. The equivalent of
          the USDC rail's faucet-scale constraint. The refusal arrived cleanly
          through the rail, was written to the pending row with Circle's own
