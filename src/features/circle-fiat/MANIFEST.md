@@ -271,6 +271,47 @@ SECTION D  2026-09-18, commit 41787cf. Reconciled against
          corrected downward twice), DESIGN_SYSTEM_NOTES.md (the in-flight
          strip; the third provenance treatment). STACK_RULES.md was done at A0.
 
+DEPLOY   2026-09-18. FIX 6 — THE SIGNATURE SCHEME WAS WRONG, and only being
+         on the internet could show it. Minutes after the subscription
+         existed, Circle called three times and all three were REFUSED: two
+         SubscriptionConfirmations and a real deposits notification for
+         Chetan's in-flight funding leg.
+         CAUSE: Circle Mint delivers through Amazon SNS, so the request is
+         made by SNS and carries NO X-Circle-Signature header at all. SNS
+         signs a CANONICAL STRING of named fields from the parsed body, with
+         an RSA key named by SigningCertURL. The header scheme — read from
+         Circle's docs at A5 and implemented faithfully — describes a delivery
+         that never arrives. Every local test passed because the replay script
+         signs the header way: the code was tested faithfully against the
+         WRONG CONTRACT, and no laptop could have revealed it, because Circle
+         cannot reach a laptop.
+         WHAT HELD: the refusals were safe. Nothing unverified booked, every
+         refusal was recorded with its raw body, the in-flight leg kept its
+         durable row. A2's rule survived — the body is a doorbell, never
+         evidence.
+         FIX (25adc21): verification dispatches on what the delivery carries.
+         SNS envelopes verify against the canonical string, which can only be
+         built AFTER parsing — inverting scheme A's ordering without weakening
+         it, because nothing is ACTED ON before verification holds either way.
+         SigningCertURL passes the same Amazon-host guard as SubscribeURL.
+         Proved against the three real refused deliveries (all now verify) and
+         pinned by 14 tests — 193 total — including the FIELD ORDER SNS signs
+         in, which when wrong verifies nothing and looks like a forgery.
+         PROVED ON THE DEPLOYMENT: invoice ec8e7dc2, 18,200.00, five legs,
+         deal settled, client money 0.00. The PAYOUT leg booked UNATTENDED —
+         observed initiated at 10:07:08, booked 10:07:28, exactly one verified
+         delivery in the window, nobody on the page. The first settlement this
+         product has made with no human involved.
+         RECORDED HONESTLY: only the payout is unambiguous. Two legs booked in
+         their gate request (Circle had already completed), one is ambiguous
+         because `applied` cannot distinguish "I booked this" from "already
+         booked", and funding needed Check status after the refusal.
+         OPEN, FIX BEFORE RELEASE: that same ambiguity. `received_at` is
+         written after the booking, so it is a recorded-at; and `applied`
+         conflates two outcomes. The system cannot prove from its own records
+         whether money was booked by a webhook or by a human.
+         Evidence: docs/product/circle-fiat/deploy.md.
+
 FIX 5 — THE ONE THAT ACTUALLY LOST MONEY (found live at case 1, 2026-09-18).
          Chetan paid a $100 repayment. The pending row said settled, no
          movement was booked, and the deal stayed at `disbursed`. The money

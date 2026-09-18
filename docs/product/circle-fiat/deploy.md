@@ -1,9 +1,10 @@
 # Deploy — Fiat rail (Circle sandbox, cycle 2)
 
-> **IN PROGRESS — written at D5–D7, 2026-09-18.** All three D7 proofs are
-> recorded. What remains is blocker 1 (the Circle webhook subscription, which
-> is what makes an unattended settlement possible at all) and the D9 teardown.
-> Do not read this as a completed phase record.
+> **D-1 through D8 complete, 2026-09-18. D9 teardown is NOT done** — the
+> scoped key, the flag and the Circle webhook subscription are all still live,
+> and the subscription in particular must be deleted or Circle keeps
+> delivering to a dead URL. Teardown is scheduled, not skipped: its trigger is
+> named at the end of this file.
 
 Date: 2026-09-18 · Audit: `deploy-kit/YOUR_DEPLOYMENT.md` (rebuilt for this
 feature at D-1; cycle 1's audit is superseded and lives in
@@ -155,20 +156,154 @@ The rail is offered, on a deal that renders the pricing step:
 
 and every host surface still answers 200.
 
-## Still to do
+## What Deploy found, and only Deploy could have
+
+**The signature scheme this cycle shipped could never have accepted a real
+Circle notification.**
+
+Within minutes of the subscription existing, Circle called the endpoint three
+times. All three were refused:
 
 ```text
-D4   DONE — both variables scoped to Preview / feat/circle-fiat. Scope
-     read-back from Chetan still outstanding as a written confirmation.
-D6   DONE — rebuilt at bc7a133; the 404→403 transition is the evidence.
-D7   proofs 1, 2 and 3 all recorded above.
-BLOCKER 1 — register the Circle webhook subscription against this URL. Until
-     it exists, no leg can settle unattended: Circle has never been told where
-     to deliver, and the replay key is refused in production. Every settlement
-     in this cycle's life has been prompted by a human, either a local replay
-     or a Check-status press. THE FIRST UNATTENDED SETTLEMENT THIS PRODUCT HAS
-     EVER MADE would be the thing this deployment exists to demonstrate.
-D9   teardown: remove the scoped key and flag, revoke the phase key at Circle,
-     REMOVE THE WEBHOOK SUBSCRIPTION (or Circle keeps delivering to a dead
-     URL), and record the date. The branch stays unmerged either way.
+09:37:21  SubscriptionConfirmation   refused-signature
+09:37:22  SubscriptionConfirmation   refused-signature
+09:50:12  Notification (deposits)    refused-signature   ← a real funding leg
+```
+
+**Why.** Circle Mint delivers through Amazon SNS. The HTTP request is made by
+SNS, not by Circle, so there is **no `X-Circle-Signature` header on it at
+all**. SNS signs a canonical string built from named fields of the parsed
+body, with an RSA key whose X.509 certificate is named by `SigningCertURL`.
+The header scheme, read from Circle's docs at A5 and implemented faithfully,
+describes a delivery that never arrives.
+
+Every local test passed because `scripts/replay-circle-webhook.mts` signs the
+header way. It tested the code faithfully against the wrong contract — and no
+amount of local testing could have revealed that, because Circle cannot reach
+a laptop. **This is the entire argument for the Deploy phase existing, in one
+defect.**
+
+**What survived the discovery, and it is the important part.** The refusals
+were SAFE. Nothing unverified was booked, every refusal was recorded with its
+raw body, and the in-flight funding leg kept its durable row — so nothing was
+lost, only unfinished. A2's rule held: the body is a doorbell, never evidence.
+
+**The fix (commit `25adc21`).** Verification now dispatches on what the
+delivery actually carries. Header-signed deliveries verify against raw bytes
+as before; SNS envelopes verify against the canonical string SNS signed, which
+can only be built *after* parsing. That inverts scheme A's ordering and does
+not weaken it: nothing is ACTED ON before verification holds either way. The
+SSRF argument is extended rather than repeated — `SigningCertURL` is a URL
+that arrived in a request body, exactly like `SubscribeURL`, so it passes the
+same host guard before anything is fetched.
+
+Proved against the three real refused deliveries, which now all verify, and
+pinned by 14 new tests (193 total) covering the field ORDER SNS signs in — the
+thing that verifies nothing and looks exactly like a forged signature when
+wrong.
+
+## D7 proof 4 — a deal settles end to end, on the public internet
+
+Invoice `ec8e7dc2`, face 18,200.00, five legs on `circle-fiat`, carried
+through the deployed preview by Chetan:
+
+```text
+deal status                     settled
+client_collections                  0.00      a conduit, never a beneficiary
+debtor_cash · Halvorsen       −18,200.00      face, exactly
+funder_cash · Northgate           +195.95      their return
+platform_operating                +186.74      the spread
+supplier_payable · Amber       +17,817.31      18,200 − 195.95 − 186.74
+```
+
+**How each leg actually finished, recorded precisely rather than summarised
+favourably:**
+
+| leg | finished by |
+|---|---|
+| funding | Check status — after the SNS defect refused Circle's notification |
+| disbursement | the gate request — Circle's payout had already completed |
+| repayment | a verified delivery, but see the ambiguity below |
+| **payout** | **a verified delivery, unattended** |
+| residual | the gate request — Circle's payout had already completed |
+
+**The payout is the one that proves the claim**, and it is worth the detail:
+
+```text
+10:07:08   observed: payout row `initiated`, nothing booked, 13 deliveries
+10:07:28   payout BOOKED
+10:07:29   delivery recorded — valid=true, resolved to the payout row
+           new deliveries during the window: exactly 1
+```
+
+Between an observation of an unbooked leg and the booking twenty seconds
+later, exactly one thing happened: a Circle notification, over the public
+internet, verified against Amazon's certificate, matched to that leg, booked.
+Nobody was on the page. **That is the first settlement this product has
+completed with no human involved** — the claim cycle 2 exists to make, which a
+laptop cannot demonstrate, verified by code written ninety minutes earlier in
+response to finding out in production that the scheme was wrong.
+
+**And the rail turns out to be genuinely mixed-mode.** Some legs complete
+inside the request, some minutes later by callback, and the deal reaches the
+same correct state either way — because both paths run `completeSettlement`
+and neither trusts the message. A2's single-booking-path design exercised for
+real rather than asserted.
+
+## The findings this deployment produced
+
+1. **`applied` cannot distinguish "I booked this" from "this was already
+   booked".** `completeSettlement` returns `settled` in both cases and the
+   route labels both `applied`. Worse, `webhook_deliveries.received_at` is
+   populated when the row is written — AFTER the booking — so it is a
+   recorded-at, not a received-at, and a delivery that books something always
+   appears to arrive after the thing it caused. Together these mean **the
+   system cannot prove, from its own records, whether money was booked by a
+   webhook or by a human.** For a product whose headline claim is unattended
+   settlement, and whose ledger is meant to be auditable, that is a real gap.
+   It is why the repayment above is recorded as ambiguous. **Fix before
+   Release.**
+
+2. **A refused delivery is never retried into success.** SNS gave up on the
+   09:50 notification; it never came back after the fix deployed. So a wrong
+   verifier loses notifications permanently rather than queueing them. The
+   only reason nothing was lost here is `checkSettlementStatus`, which
+   re-reads the rail's record instead of waiting to be told — A2's design
+   earning its keep in a scenario nobody designed it for.
+
+3. **An open page never learns that money moved.** `revalidatePath` invalidates
+   the server's cache; it does not push to a tab already open. On immediate
+   rails this could not arise. On a deferred rail, someone is watching a screen
+   while the thing they are waiting for happens elsewhere. *Cycle 3.*
+
+4. **The SNS handshake cannot be completed by the endpoint alone** until the
+   verifier change is exercised on a fresh subscription. This one was confirmed
+   by hand, applying the same Amazon-host guard the route applies. Every new
+   subscription needs that until proven otherwise — a small recurring tax, and
+   the reason this is a named item at R0 rather than a footnote.
+
+## D9 — teardown, scheduled with its trigger
+
+**Trigger: when the preview's purpose is served** — that is, when Release has
+taken its R0 decision on cycle 2, or when the branch is superseded by cycle 3,
+whichever comes first.
+
+```text
+[ ] delete the Circle webhook subscription 56709d33-e17c-45bc-aa1d-5ce1b976fd08
+    — DO THIS FIRST, or Circle keeps delivering to a URL that has stopped
+      answering, and the deliveries are simply lost
+[ ] remove CIRCLE_API_KEY from the Vercel Preview scope
+[ ] remove NEXT_PUBLIC_ENABLE_CIRCLE_RAIL from the Vercel Preview scope
+[ ] revoke the phase API key at Circle (the local .env.local key stays)
+[ ] record the teardown date here
+```
+
+The branch stays unmerged either way.
+
+## Outstanding
+
+```text
+Scope read-back from Chetan as a written confirmation (names and scopes only).
+The flag and key are demonstrably live — the 404→403 transition and five
+booked legs prove it — but the dashboard state itself has not been read back.
 ```
