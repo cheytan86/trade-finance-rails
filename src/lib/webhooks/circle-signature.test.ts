@@ -6,9 +6,13 @@ import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import {
   verifyCircleSignature,
   isTrustedSubscribeUrl,
+  isTrustedAmazonUrl,
   circleKeyFetcher,
   LOCAL_REPLAY_KEY_ID,
   headerValue,
+  snsCanonicalString,
+  verifySnsSignature,
+  verifyDelivery,
   type KeyFetcher,
 } from "./circle-signature";
 
@@ -137,5 +141,161 @@ describe("the SNS handshake cannot be used to make us fetch anything", () => {
   it("REFUSES plain http, and anything unparseable", () => {
     expect(isTrustedSubscribeUrl("http://sns.us-east-1.amazonaws.com/x")).toBe(false);
     expect(isTrustedSubscribeUrl("not a url")).toBe(false);
+  });
+});
+
+
+// ── SCHEME B — SNS ──────────────────────────────────────────────────────────
+//
+// Found at Deploy, 2026-09-18: Circle Mint delivers through Amazon SNS, so the
+// request is made by SNS and carries NO X-Circle-Signature header at all. The
+// header scheme this module shipped with could never have accepted a real
+// notification. These tests pin the scheme that actually arrives.
+
+describe("the SNS canonical string — rebuilding exactly what was signed", () => {
+  const notification = {
+    Type: "Notification",
+    MessageId: "m-1",
+    Message: "{}",
+    Timestamp: "2026-09-18T09:50:12.000Z",
+    TopicArn: "arn:aws:sns:us-east-1:1:topic",
+    Signature: "x",
+    SigningCertURL: "https://sns.us-east-1.amazonaws.com/cert.pem",
+  };
+
+  it("uses SNS's field order, not the body's key order", () => {
+    // The body above lists Type first; SNS signs Message first. Getting this
+    // wrong verifies nothing and looks like a bad signature.
+    expect(snsCanonicalString(notification)).toBe(
+      "Message\n{}\n" +
+        "MessageId\nm-1\n" +
+        "Timestamp\n2026-09-18T09:50:12.000Z\n" +
+        "TopicArn\narn:aws:sns:us-east-1:1:topic\n" +
+        "Type\nNotification\n",
+    );
+  });
+
+  it("includes Subject only when it is present", () => {
+    expect(snsCanonicalString({ ...notification, Subject: "hi" })).toContain("Subject\nhi\n");
+    expect(snsCanonicalString(notification)).not.toContain("Subject");
+  });
+
+  it("signs the handshake's own fields, which are a different set", () => {
+    const canon = snsCanonicalString({
+      Type: "SubscriptionConfirmation",
+      MessageId: "m-2",
+      Message: "confirm me",
+      SubscribeURL: "https://sns.us-east-1.amazonaws.com/?Action=Confirm",
+      Timestamp: "2026-09-18T09:37:21.000Z",
+      Token: "tok",
+      TopicArn: "arn:aws:sns:us-east-1:1:topic",
+    });
+    expect(canon).toContain("SubscribeURL\n");
+    expect(canon).toContain("Token\ntok\n");
+  });
+
+  it("REFUSES to guess when a signed field is missing", () => {
+    const { Timestamp: _dropped, ...missing } = notification;
+    expect(snsCanonicalString(missing)).toBeNull();
+  });
+
+  it("refuses a message type it has not reasoned about", () => {
+    expect(snsCanonicalString({ ...notification, Type: "SomethingNew" })).toBeNull();
+  });
+});
+
+describe("the SNS verifier refuses before it fetches anything", () => {
+  const base = {
+    Type: "Notification",
+    MessageId: "m-1",
+    Message: "{}",
+    Timestamp: "2026-09-18T09:50:12.000Z",
+    TopicArn: "arn:aws:sns:us-east-1:1:topic",
+    SignatureVersion: "1",
+    Signature: "AAAA",
+  };
+  /** Fails the test if the verifier fetches when it should have refused. */
+  const noFetch = (() => {
+    throw new Error("fetched a certificate it should have refused");
+  }) as unknown as typeof fetch;
+
+  it("refuses a certificate URL on a host Amazon does not own", async () => {
+    // The whole SSRF argument, applied to the cert URL as well as SubscribeURL:
+    // both are URLs that arrived inside a request body.
+    await expect(
+      verifySnsSignature(
+        { ...base, SigningCertURL: "https://sns.us-east-1.amazonaws.com.evil.example/c.pem" },
+        noFetch,
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it("refuses plain HTTP even on an Amazon host", async () => {
+    await expect(
+      verifySnsSignature({ ...base, SigningCertURL: "http://sns.us-east-1.amazonaws.com/c.pem" }, noFetch),
+    ).resolves.toBe(false);
+  });
+
+  it("refuses a signature version it has not reasoned about", async () => {
+    await expect(
+      verifySnsSignature(
+        { ...base, SignatureVersion: "9", SigningCertURL: "https://sns.us-east-1.amazonaws.com/c.pem" },
+        noFetch,
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it("refuses when there is no signature at all", async () => {
+    const { Signature: _none, ...unsigned } = base;
+    await expect(
+      verifySnsSignature({ ...unsigned, SigningCertURL: "https://sns.us-east-1.amazonaws.com/c.pem" }, noFetch),
+    ).resolves.toBe(false);
+  });
+
+  it("guards the cert URL with the same rule as the SubscribeURL", () => {
+    expect(isTrustedAmazonUrl("https://sns.us-east-1.amazonaws.com/c.pem")).toBe(true);
+    expect(isTrustedSubscribeUrl("https://sns.us-east-1.amazonaws.com/c.pem")).toBe(true);
+    expect(isTrustedAmazonUrl("https://amazonaws.com.evil.example/c.pem")).toBe(false);
+  });
+});
+
+describe("one door, two schemes, chosen by what the delivery carries", () => {
+  const snsBody = JSON.stringify({
+    Type: "Notification",
+    MessageId: "m",
+    Message: "{}",
+    Timestamp: "t",
+    TopicArn: "a",
+    SignatureVersion: "1",
+    Signature: "AAAA",
+    SigningCertURL: "https://evil.example/c.pem",
+  });
+
+  it("picks the SNS scheme when there are no Circle headers", async () => {
+    const v = await verifyDelivery({}, snsBody, (async () => null) as KeyFetcher);
+    expect(v.scheme).toBe("sns");
+    // and still refuses, because that cert URL is not Amazon's
+    expect(v.valid).toBe(false);
+  });
+
+  it("picks the header scheme when the headers are there", async () => {
+    const v = await verifyDelivery(
+      { "x-circle-signature": "AAAA", "x-circle-key-id": "k" },
+      snsBody,
+      (async () => null) as KeyFetcher,
+    );
+    expect(v.scheme).toBe("circle-header");
+    expect(v.valid).toBe(false);
+  });
+
+  it("refuses a delivery that carries neither", async () => {
+    const v = await verifyDelivery({}, JSON.stringify({ hello: "world" }), (async () => null) as KeyFetcher);
+    expect(v.valid).toBe(false);
+    expect(v.scheme).toBeNull();
+  });
+
+  it("refuses an unparseable body without throwing", async () => {
+    const v = await verifyDelivery({}, "not json", (async () => null) as KeyFetcher);
+    expect(v.valid).toBe(false);
   });
 });

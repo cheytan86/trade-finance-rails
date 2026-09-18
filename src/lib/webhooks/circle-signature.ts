@@ -5,19 +5,38 @@
 // with a stranger's HTTP request. Its ONLY credential is the signature, so
 // every branch that cannot prove authenticity must refuse.
 //
-// WHAT CIRCLE ACTUALLY DOES, read from their docs at A5 rather than assumed:
-// notifications are signed with an ASYMMETRIC key. The delivery carries
-// `X-Circle-Signature` (base64) and `X-Circle-Key-Id` (a UUID), and the public
-// key is fetched from Circle by that id. There is NO shared secret — which is
-// why `CIRCLE_WEBHOOK_SECRET` was removed from .env.example. It is a better
-// posture than a secret we would have to hold and protect.
+// TWO SCHEMES ARRIVE AT THIS DOOR, and cycle 2 shipped knowing only one.
 //
-// The signature is over the RAW BODY BYTES. Anything that re-serialises JSON
-// before verifying has already lost — key order and whitespace are not
-// guaranteed to survive a parse/stringify round trip, so the route reads
-// text() first and parses only after the signature holds.
+// SCHEME A — header-signed (`X-Circle-Signature` + `X-Circle-Key-Id`), the
+// asymmetric scheme read from Circle's docs at A5. The signature is over the
+// RAW BODY BYTES, so the route reads text() first and never re-serialises.
+// The local replay script signs this way, which is why the whole asynchronous
+// path was testable offline.
+//
+// SCHEME B — SNS-signed, and this is what Circle Mint ACTUALLY DELIVERS.
+// Found at Deploy, 2026-09-18, the first time this app was somewhere Circle
+// could reach: every real notification arrives as an Amazon SNS envelope, and
+// the HTTP request is made by SNS rather than by Circle. There is no
+// `X-Circle-Signature` header on it at all. SNS signs a CANONICAL STRING built
+// from named fields of the parsed body, with an RSA key whose X.509
+// certificate is fetched from `SigningCertURL`.
+//
+// So scheme B cannot verify raw bytes — the signature is not over them. It is
+// over a reconstruction, which means the body must be parsed BEFORE it can be
+// verified. That inverts scheme A's rule and is not a weakening of it: what
+// matters is that nothing is ACTED ON until verification holds, and both
+// schemes still refuse before any meaning is taken from the message. A2's rule
+// survives intact — the body is a doorbell, never evidence.
+//
+// There is NO shared secret in either scheme, which is why
+// `CIRCLE_WEBHOOK_SECRET` was removed from .env.example.
 
-import { createVerify, createPublicKey, verify as cryptoVerify } from "node:crypto";
+import {
+  createVerify,
+  createPublicKey,
+  verify as cryptoVerify,
+  X509Certificate,
+} from "node:crypto";
 
 export class SignatureError extends Error {
   readonly rule: string;
@@ -165,6 +184,13 @@ function toPem(key: string): string {
  * unexpected host is refused and recorded.
  */
 export function isTrustedSubscribeUrl(url: string): boolean {
+  return isTrustedAmazonUrl(url);
+}
+
+/** HTTPS, and a host Amazon owns. Used for both the SubscribeURL we fetch and
+ *  the SigningCertURL we fetch — the same reasoning applies to both, because
+ *  both are URLs that arrived inside a request body. */
+export function isTrustedAmazonUrl(url: string): boolean {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -173,4 +199,126 @@ export function isTrustedSubscribeUrl(url: string): boolean {
   }
   if (parsed.protocol !== "https:") return false;
   return /(^|\.)amazonaws\.com$/.test(parsed.hostname);
+}
+
+// ── scheme B: SNS ───────────────────────────────────────────────────────────
+
+/** The fields SNS signs, in the order it signs them. Type decides the set. */
+const SNS_SIGNED_FIELDS: Record<string, readonly string[]> = {
+  Notification: ["Message", "MessageId", "Subject", "Timestamp", "TopicArn", "Type"],
+  SubscriptionConfirmation: [
+    "Message", "MessageId", "SubscribeURL", "Timestamp", "Token", "TopicArn", "Type",
+  ],
+  UnsubscribeConfirmation: [
+    "Message", "MessageId", "SubscribeURL", "Timestamp", "Token", "TopicArn", "Type",
+  ],
+};
+
+/**
+ * Rebuild exactly what SNS signed: `name\nvalue\n` per field, in order.
+ * `Subject` is the only optional one — present or absent, never empty-filled.
+ * A missing required field means we cannot reconstruct what was signed, and
+ * guessing is not verification, so it returns null and the caller refuses.
+ */
+export function snsCanonicalString(body: Record<string, unknown>): string | null {
+  const type = typeof body.Type === "string" ? body.Type : null;
+  const fields = type ? SNS_SIGNED_FIELDS[type] : null;
+  if (!fields) return null;
+
+  let canonical = "";
+  for (const field of fields) {
+    const value = body[field];
+    if (value === undefined || value === null) {
+      if (field === "Subject") continue;
+      return null;
+    }
+    canonical += `${field}\n${String(value)}\n`;
+  }
+  return canonical;
+}
+
+const certCache = new Map<string, string>();
+
+/**
+ * Verify an SNS envelope against the certificate SNS names — after checking
+ * that the certificate lives on a host Amazon owns. Fetching a URL that
+ * arrived in a request body is how a server becomes someone else's proxy, and
+ * a certificate URL is no more trustworthy than a SubscribeURL.
+ */
+export async function verifySnsSignature(
+  body: Record<string, unknown>,
+  fetchImpl: typeof fetch = fetch,
+): Promise<boolean> {
+  const signature = typeof body.Signature === "string" ? body.Signature : null;
+  const certUrl =
+    typeof body.SigningCertURL === "string"
+      ? body.SigningCertURL
+      : typeof body.SigningCertUrl === "string"
+        ? body.SigningCertUrl
+        : null;
+  if (!signature || !certUrl) return false;
+  if (!isTrustedAmazonUrl(certUrl)) return false;
+
+  // SignatureVersion 1 is SHA1, 2 is SHA256. A version we have not reasoned
+  // about is refused rather than guessed at.
+  const version = String(body.SignatureVersion ?? "");
+  const algorithm = version === "1" ? "RSA-SHA1" : version === "2" ? "RSA-SHA256" : null;
+  if (!algorithm) return false;
+
+  const canonical = snsCanonicalString(body);
+  if (canonical === null) return false;
+
+  try {
+    let pem = certCache.get(certUrl);
+    if (!pem) {
+      const res = await fetchImpl(certUrl);
+      if (!res.ok) return false;
+      pem = await res.text();
+      certCache.set(certUrl, pem);
+    }
+    const publicKey = new X509Certificate(pem).publicKey;
+    const verifier = createVerify(algorithm);
+    verifier.update(canonical, "utf8");
+    verifier.end();
+    return verifier.verify(publicKey, Buffer.from(signature, "base64"));
+  } catch {
+    return false;
+  }
+}
+
+export interface DeliveryVerdict {
+  valid: boolean;
+  scheme: "circle-header" | "sns" | null;
+  /** Parsed only when scheme B needed it; the route re-parses otherwise. */
+  body: Record<string, unknown> | null;
+}
+
+/**
+ * ONE DOOR, TWO SCHEMES, and the scheme is chosen by what the delivery
+ * carries — never by what we hope it is. A delivery that matches neither is
+ * refused, which is the same answer an unsigned one gets.
+ */
+export async function verifyDelivery(
+  headers: Headers | Record<string, string>,
+  rawBody: string,
+  fetchKey: KeyFetcher = circleKeyFetcher(),
+): Promise<DeliveryVerdict> {
+  if (headerValue(headers, SIGNATURE_HEADER) && headerValue(headers, KEY_ID_HEADER)) {
+    return {
+      valid: await verifyCircleSignature(headers, rawBody, fetchKey),
+      scheme: "circle-header",
+      body: null,
+    };
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody) as Record<string, unknown>;
+  } catch {
+    return { valid: false, scheme: null, body: null };
+  }
+  if (body && typeof body === "object" && typeof body.Signature === "string") {
+    return { valid: await verifySnsSignature(body), scheme: "sns", body };
+  }
+  return { valid: false, scheme: null, body };
 }

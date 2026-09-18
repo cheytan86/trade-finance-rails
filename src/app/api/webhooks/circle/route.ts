@@ -26,9 +26,8 @@ import { getDb } from "@/db/client";
 import { pendingSettlements, webhookDeliveries } from "@/db/schema";
 import { completeSettlement } from "@/lib/settlement/pending";
 import {
-  circleKeyFetcher,
   isTrustedSubscribeUrl,
-  verifyCircleSignature,
+  verifyDelivery,
 } from "@/lib/webhooks/circle-signature";
 
 export const dynamic = "force-dynamic";
@@ -42,17 +41,16 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("fiat rail disabled", { status: 404 });
   }
 
-  // RAW BYTES FIRST. The signature is over exactly what was sent; parsing and
-  // re-serialising JSON does not reliably reproduce it, so nothing is parsed
-  // until the signature holds.
+  // RAW BYTES FIRST, always — the record is of what was sent, not of what we
+  // made of it. WHICH SCHEME verifies it depends on what the delivery carries:
+  // a header-signed delivery is verified against the raw bytes; an SNS
+  // envelope is verified against the canonical string SNS actually signed,
+  // which can only be built after parsing. See circle-signature.ts. Nothing is
+  // ACTED ON either way until verification holds.
   const rawBody = await request.text();
 
-  const valid = await verifyCircleSignature(
-    request.headers,
-    rawBody,
-    circleKeyFetcher(),
-  );
-  if (!valid) {
+  const verdict = await verifyDelivery(request.headers, rawBody);
+  if (!verdict.valid) {
     await record(rawBody, false, "refused-signature", null, null);
     // 403, not 200: a legitimate delivery whose key fetch failed SHOULD be
     // retried by the sender. A forgery retrying costs nothing but a log line.
@@ -60,11 +58,15 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   let body: Record<string, unknown>;
-  try {
-    body = JSON.parse(rawBody) as Record<string, unknown>;
-  } catch {
-    await record(rawBody, true, "unmatched", null, null);
-    return new Response("unparseable body", { status: 400 });
+  if (verdict.body) {
+    body = verdict.body;
+  } else {
+    try {
+      body = JSON.parse(rawBody) as Record<string, unknown>;
+    } catch {
+      await record(rawBody, true, "unmatched", null, null);
+      return new Response("unparseable body", { status: 400 });
+    }
   }
 
   // ── the SNS handshake ─────────────────────────────────────────────────────
