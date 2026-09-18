@@ -240,10 +240,12 @@ describe.skipIf(!HAS_DB)("the spine, end to end, against the real database", () 
     expect(entries).toHaveLength(2);
     expect(entries.reduce((s, e) => s + e.amountMinor, 0n)).toBe(0n);
 
-    // 85% of 48,000.00 = 40,800.00 moved from funder cash into client money.
+    // 85% of 48,000.00 = 40,800.00 principal, discounted by the funder's own
+    // 544.00 return: 40,256.00 is what actually leaves their cash. They are
+    // repaid the principal at payout — buying a receivable, not making a loan.
     const now = await balances(db);
-    expect((now.get(funderCash) ?? 0n) - (before.get(funderCash) ?? 0n)).toBe(-4_080_000n);
-    expect((now.get(clientMoney) ?? 0n) - (before.get(clientMoney) ?? 0n)).toBe(4_080_000n);
+    expect((now.get(funderCash) ?? 0n) - (before.get(funderCash) ?? 0n)).toBe(-4_025_600n);
+    expect((now.get(clientMoney) ?? 0n) - (before.get(clientMoney) ?? 0n)).toBe(4_025_600n);
   });
 
   it("7 · funding the same deal twice books exactly once", async () => {

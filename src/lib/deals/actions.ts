@@ -606,7 +606,8 @@ export async function fundInvoice(
       type: "funding",
       from: "funder",
       to: "platform",
-      amountMinor: snapshot.principalMinor,
+      // Discounted: principal less the funder's return — see fundingEntries.
+      amountMinor: snapshot.funderFinancingMinor,
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
     if (!settled) return inFlight(id);
@@ -770,8 +771,9 @@ export async function payoutFunder(
       type: "payout",
       from: "platform",
       to: "funder",
-      amountMinor:
-        snapshot.principalMinor + snapshot.funderInterestMinor + overdue.funderShareMinor,
+      // The principal back, plus only the overdue share — the base return was
+      // already taken as the discount at funding. See payoutEntries.
+      amountMinor: snapshot.principalMinor + overdue.funderShareMinor,
       entries: entries.map((e) => ({ accountId: e.accountId, amountMinor: e.amountMinor })),
     });
     if (!settled) return inFlight(id);

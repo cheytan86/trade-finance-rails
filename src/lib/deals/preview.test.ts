@@ -45,15 +45,19 @@ const late10 = computeOverdue({
 });
 
 describe("what the gate shows is what the ledger will accept", () => {
-  it("funding: two entries, principal out of funder cash into treasury, Σ=0", () => {
+  it("funding: the funder pays in principal LESS their return — discounting, not lending", () => {
     const e = fundingEntries(snap, ACC);
     expect(e).toHaveLength(2);
-    expect(e[0].amountMinor).toBe(-4_080_000n);
-    expect(e[1].amountMinor).toBe(4_080_000n);
+    // 40,800.00 principal − 544.00 return = 40,256.00 actually handed over.
+    // The return is never given to us and so can never be given back wrongly.
+    expect(e[0].amountMinor).toBe(-4_025_600n);
+    expect(e[1].amountMinor).toBe(4_025_600n);
+    expect(-e[0].amountMinor).toBe(snap.principalMinor - snap.funderInterestMinor);
+    expect(-e[0].amountMinor).toBe(snap.funderFinancingMinor);
     expect(() => validateEntries(e)).not.toThrow();
   });
 
-  it("disbursement: the platform takes ONLY its margin; the funder's interest stays client money", () => {
+  it("disbursement: the platform takes ONLY its margin, and client money empties exactly", () => {
     const e = disbursementEntries(snap, ACC);
     expect(e).toHaveLength(3);
     // cycle 2: client money gives up the supplier's payment plus the
@@ -74,15 +78,15 @@ describe("what the gate shows is what the ledger will accept", () => {
   it("after funding and disbursement, client money holds EXACTLY the funder's interest", () => {
     const all = [...fundingEntries(snap, ACC), ...disbursementEntries(snap, ACC)];
     expect(all.reduce((s, e) => s + e.amountMinor, 0n)).toBe(0n);
-    // THE SEGREGATION CLAIM, asserted rather than intended. Cycle 1 expected
-    // this to be flat, because the platform had swept the whole principal and
-    // parked the funder's interest in fee_income. Now the conduit keeps what
-    // is still owed to the funder, and the platform's account holds only what
-    // the platform has earned.
+    // THE SEGREGATION CLAIM, asserted rather than intended, and STRONGER
+    // under discounting (Chetan, 2026-09-18): the funder's return never
+    // reaches us at all, so after the supplier is paid the conduit is EMPTY.
+    // Cycle 1 swept the whole principal and parked the return in fee_income;
+    // cycle 2 held it as client money; neither is needed if it never arrives.
     const clientMoney = all
       .filter((e) => e.accountId === "acc-client")
       .reduce((s, e) => s + e.amountMinor, 0n);
-    expect(clientMoney).toBe(snap.funderInterestMinor);
+    expect(clientMoney).toBe(0n);
 
     const platformOwn = all
       .filter((e) => e.accountId === "acc-platform")
@@ -103,15 +107,14 @@ describe("the back half — repayment, payout, residual", () => {
     expect(by(r, "acc-client")).toBe(4_800_000n);
   });
 
-  it("payout on time: funder gets principal + their agreed return", () => {
+  it("payout on time: the funder gets the PRINCIPAL back — the return was the discount", () => {
     const p = payoutEntries(snap, onTime, ACC);
     expect(sum(p)).toBe(0n);
-    // 40,800.00 principal + 544.00 funder interest
+    // 40,800.00 principal, and not a cent of interest: it was taken up front
+    // as the discount, so paying it again here would pay it twice.
     expect(p).toHaveLength(2); // cycle 2: two accounts, not three
-    expect(by(p, "acc-funder")).toBe(4_080_000n + 54_400n);
-    // It all comes out of client money — the platform never held it, so there
-    // is nothing for a platform account to give back.
-    expect(by(p, "acc-client")).toBe(-(4_080_000n + 54_400n));
+    expect(by(p, "acc-funder")).toBe(4_080_000n);
+    expect(by(p, "acc-client")).toBe(-4_080_000n);
     expect(by(p, "acc-platform")).toBe(0n);
   });
 
@@ -133,8 +136,9 @@ describe("the back half — repayment, payout, residual", () => {
     expect(sum(p)).toBe(0n);
     expect(sum(r)).toBe(0n);
 
-    // funder: principal + return + overdue share
-    expect(by(p, "acc-funder")).toBe(4_080_000n + 54_400n + 11_333n);
+    // funder: principal + the overdue share ONLY. Extra days cannot be
+    // discounted up front, so that part is genuinely paid at payout.
+    expect(by(p, "acc-funder")).toBe(4_080_000n + 11_333n);
     // supplier: residual less the charge
     expect(by(r, "acc-payable")).toBe(720_000n - 13_033n);
     // platform keeps the spread
@@ -153,7 +157,7 @@ describe("the back half — repayment, payout, residual", () => {
     expect(by(all, "acc-client")).toBe(0n); // conduit, not beneficiary
     // and every party's net is exactly what the deal promised them
     expect(by(all, "acc-debtor")).toBe(-4_800_000n); // paid face
-    expect(by(all, "acc-funder")).toBe(-4_080_000n + 4_080_000n + 54_400n + 11_333n); // return + overdue
+    expect(by(all, "acc-funder")).toBe(-4_025_600n + 4_080_000n + 11_333n); // return + overdue
     expect(by(all, "acc-payable")).toBe(4_000_400n + 720_000n - 13_033n); // disbursement + residual − charge
   });
 });

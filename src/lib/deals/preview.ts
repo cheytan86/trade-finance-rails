@@ -36,12 +36,26 @@ export function fundingEntries(
   snapshot: PricingBreakdown,
   a: FundingAccounts,
 ): EntryPreview[] {
+  // DISCOUNTING, not lending (Chetan, 2026-09-18). The funder buys the
+  // receivable at a discount: they pay in principal LESS the return they are
+  // going to earn, and are repaid the principal at maturity. Their 0.53 is
+  // never handed over and never held by us, so it cannot be mislaid, mis-
+  // segregated, or paid back to them out of client money.
+  //
+  // Cycle 0 moved the full principal here and returned principal + interest at
+  // payout. Same return, same platform margin — but it contradicted the
+  // pricing screen's own "Funder pays in — principal less their return", and
+  // the screen was the one telling the truth about the product.
   return [
-    { accountId: a.funderCash.id, label: a.funderCash.label, amountMinor: -snapshot.principalMinor },
+    {
+      accountId: a.funderCash.id,
+      label: a.funderCash.label,
+      amountMinor: -snapshot.funderFinancingMinor,
+    },
     {
       accountId: a.clientCollections.id,
       label: a.clientCollections.label,
-      amountMinor: snapshot.principalMinor,
+      amountMinor: snapshot.funderFinancingMinor,
     },
   ];
 }
@@ -94,8 +108,10 @@ export function payoutEntries(
   overdue: OverdueBreakdown,
   a: PayoutAccounts,
 ): EntryPreview[] {
-  const funderTotal =
-    snapshot.principalMinor + snapshot.funderInterestMinor + overdue.funderShareMinor;
+  // The funder is repaid the PRINCIPAL: their base return was taken as the
+  // discount at funding and is not paid again here. Only the overdue share is
+  // added, because extra days cannot be known — or discounted — up front.
+  const funderTotal = snapshot.principalMinor + overdue.funderShareMinor;
   return [
     {
       accountId: a.clientCollections.id,
