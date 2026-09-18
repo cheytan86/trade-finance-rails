@@ -230,6 +230,10 @@ export async function completeSettlement(
     ...actors,
     ...refs,
     amountMinor: row.amountMinor,
+    // The row knows when we asked; the rail cannot. Without this a rail that
+    // recognises inbound money by arrival has to guess a window, and a guess
+    // that starts at "now" reaches backwards past the leg's own beginning.
+    initiatedAt: row.initiatedAt ?? undefined,
   };
 
   let outcome;
@@ -254,6 +258,33 @@ export async function completeSettlement(
   }
   const verified = outcome.transfer;
 
+  // A RAIL REFERENCE BELONGS TO EXACTLY ONE LEG, and cycle 2 found out the
+  // hard way why that has to be checked here rather than trusted.
+  //
+  // An inbound deposit is recognised by amount and arrival window, because a
+  // deposit has no id until it exists. Two deals of the SAME face value —
+  // entirely ordinary — can therefore both match the same deposit, and the
+  // ledger's uniqueness guard then refuses the second booking. Correctly.
+  //
+  // What must never happen is reading that refusal as "already done". Found
+  // live at case 1, 2026-09-18: a real $100 repayment was matched to a
+  // deposit that had settled another invoice an hour earlier, the guard
+  // refused it, the refusal was read as a duplicate delivery, and the leg was
+  // marked settled with nothing booked. The money was paid and no record of
+  // it exists — the exact defect FIX 1 exists to prevent, arriving through
+  // the one door FIX 1 did not watch.
+  const [claimed] = await db
+    .select({ key: settlementEvents.idempotencyKey })
+    .from(settlementEvents)
+    .where(eq(settlementEvents.evidenceRef, verified.reference));
+  if (claimed && claimed.key !== row.idempotencyKey) {
+    const reason =
+      `the rail's record for this leg points at ${verified.reference}, which already settled a different leg. ` +
+      `Nothing has been booked — this is a reconciliation exception (cycle 3).`;
+    await markFailed(db, pendingId, reason);
+    return { status: "failed", reason, pendingId };
+  }
+
   const entries = parseStoredEntries(row.entries);
   let eventId: string;
   try {
@@ -268,10 +299,24 @@ export async function completeSettlement(
     eventId = booked.eventId;
   } catch (err) {
     if (err instanceof LedgerError && err.rule === "ledger-already-recorded") {
-      // Two deliveries raced. The database settled it; this one is a no-op.
-      await markSettled(db, pendingId);
-      await advanceFromBookedLegs(db, row.invoiceId);
-      return { status: "settled", reference: verified.reference, eventId: "" };
+      // Two deliveries raced — but ONLY if the movement that exists is this
+      // leg's. The same refusal is raised when the evidence belongs to
+      // somebody else, and calling that "settled" is how a payment goes
+      // missing. Check whose it is before believing it.
+      const [mine] = await db
+        .select({ id: settlementEvents.id })
+        .from(settlementEvents)
+        .where(eq(settlementEvents.idempotencyKey, row.idempotencyKey));
+      if (mine) {
+        await markSettled(db, pendingId);
+        await advanceFromBookedLegs(db, row.invoiceId);
+        return { status: "settled", reference: verified.reference, eventId: "" };
+      }
+      const reason =
+        `the ledger refused this booking as already recorded, but no movement exists for this leg — ` +
+        `its evidence ${verified.reference} belongs to another. Nothing booked; a reconciliation exception (cycle 3).`;
+      await markFailed(db, pendingId, reason);
+      return { status: "failed", reason, pendingId };
     }
     throw err;
   }

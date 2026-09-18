@@ -34,6 +34,17 @@ export interface TransferRequest {
   /** Minor units (cents) — the ledger's unit. The rail converts at its own
    *  boundary (USDC has 6dp; cents have 2). */
   amountMinor: bigint;
+  /** WHEN THIS LEG ASKED FOR THE MONEY, resolved by the caller from the
+   *  pending row. A rail that recognises an inbound payment by amount and
+   *  arrival — rather than by an id it never had — needs to know which
+   *  arrivals could possibly be this leg's, and "before we asked" is the only
+   *  answer that does not depend on how long ago the question is being asked.
+   *
+   *  Cycle 2 shipped without it and approximated with `now − one hour`, which
+   *  matched a deposit that had settled a different invoice 49 minutes before
+   *  this leg existed. Optional so a rail that does not recognise by arrival
+   *  can ignore it. */
+  initiatedAt?: Date;
 }
 
 /** What the gate dialog shows before a person confirms. */

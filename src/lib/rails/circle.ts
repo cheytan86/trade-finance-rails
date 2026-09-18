@@ -148,8 +148,11 @@ export const circleFiatRail: SettlementRail = {
 
     if (receipt.reference.startsWith("inbound:")) {
       // Recognise the deposit rather than look it up: we never had its id.
+      // The window starts when THIS LEG asked for the money. Falling back to
+      // the sliding hour is what let a deposit from before the leg existed
+      // look like a candidate (case 1, 2026-09-18).
       const deposits = await listDeposits();
-      return matchInboundDeposit(deposits, expected, inboundInitiatedAt());
+      return matchInboundDeposit(deposits, expected, req.initiatedAt ?? inboundInitiatedAt());
     }
 
     const payout = await getPayout(receipt.reference);

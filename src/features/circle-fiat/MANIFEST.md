@@ -239,6 +239,46 @@ A6       The screens. The in-flight strip (the cycle's one new pattern, and the
          The ledger shows both subtotals; fee_income renders NOWHERE, because
          it is retired and holds nothing.
 
+FIX 5 — THE ONE THAT ACTUALLY LOST MONEY (found live at case 1, 2026-09-18).
+         Chetan paid a $100 repayment. The pending row said settled, no
+         movement was booked, and the deal stayed at `disbursed`. The money
+         was paid and no record of it existed — FIX 1's exact defect, arriving
+         through the one door FIX 1 did not watch.
+         THE CHAIN, from the sandbox's own records:
+           07:46:27  repayment leg initiated
+           07:46:28  verify looks for a 100.00 deposit in a window of
+                     `now − 1 hour` = 06:46. Deposit a0afd5d4 (100.00 @ 06:57,
+                     which had settled invoice b83f7902's repayment at 06:58)
+                     is the ONLY candidate — Chetan's own deposit has not
+                     landed yet.
+           07:46:29  99bea655 (100.00) arrives, one second too late to be seen.
+                     bookMovement is called with a0afd5d4; the uniqueness
+                     guard refuses it — CORRECTLY; the refusal is read as "a
+                     duplicate delivery of this leg"; the leg is marked
+                     settled; nothing books.
+         It surfaced only because two deals shared a face value. $100 twice is
+         not exotic — identical invoice amounts are ordinary.
+         FIXED AT BOTH ENDS:
+           ROOT CAUSE — the inbound window ran from `now`, so it reached back
+           past the leg's own beginning and GREW the longer you waited.
+           TransferRequest gains initiatedAt, resolved by the caller from the
+           pending row; circle.ts uses it. A deposit that arrived before the
+           leg existed can no longer be a candidate.
+           CONSEQUENCE — completeSettlement now checks whose evidence it is
+           before believing a refusal: a reference owned by another leg is a
+           NAMED reconciliation exception (cycle 3), and `ledger-already-
+           recorded` only means "settled" when a movement for THIS leg exists.
+         THE LESSON, and it is the cycle's sharpest: matchInboundDeposit
+         ALREADY had a passing test named "ignores a deposit that landed
+         BEFORE we asked for the money". It was correct the whole time. It
+         passed because the test handed it the right timestamp and production
+         handed it a sliding one. A correct function, called incorrectly —
+         which is where all six of today's defects lived: not inside a unit,
+         but at the seam between units, where the suite has nothing to say.
+         2 regression tests added (179 total). Chetan's row was repaired to
+         `failed` carrying this reason; deposit 99bea655 stays unreconciled,
+         which is honestly a cycle-3 exception and is recorded as one.
+
 FIX 3 — DISCOUNTING, NOT LENDING (Chetan's decision, 2026-09-18). A SCOPE
          ADDITION made during Develop, recorded here rather than absorbed; it
          belongs in design.md at cycle close, as cycle 1's 2026-09-09 amendment

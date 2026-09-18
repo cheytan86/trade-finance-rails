@@ -296,6 +296,60 @@ describe.skipIf(!HAS_DB)("one leg is never in flight twice", () => {
     expect(rows.filter((r) => r.status === "settled")).toHaveLength(1);
   });
 
+  // The other half of the same defect. matchInboundDeposit already refused a
+  // deposit that landed before we asked — and its unit test passed all along,
+  // because the test handed it the right timestamp. Production handed it
+  // `now − one hour`, a window that reaches backwards past the leg's own
+  // beginning and grows the longer you wait. A correct function, called
+  // incorrectly: the caller must pass the row's own initiated_at.
+  it("verify is told when THIS leg asked for the money, not a sliding window", async () => {
+    const invoiceId = await anInvoice();
+    let seen: Date | undefined;
+    const capturing: SettlementRail = {
+      ...instantRail("demo:when"),
+      verify: async (req, receipt) => {
+        seen = req.initiatedAt;
+        return instantRail("demo:when").verify(req, receipt);
+      },
+    };
+    await settleLeg(db, spec(invoiceId), () => capturing);
+
+    const [row] = await pendingRowsFor(invoiceId);
+    expect(seen).toBeInstanceOf(Date);
+    // It is the row's own timestamp — not "an hour ago", which is what the
+    // defect passed and what would let somebody else's deposit qualify.
+    expect(seen!.getTime()).toBe(row.initiatedAt!.getTime());
+    expect(Date.now() - seen!.getTime()).toBeLessThan(60 * 60_000);
+  });
+
+  // Found live at case 1, 2026-09-18, and it cost a real $100 repayment.
+  // An inbound deposit is matched by amount and window, so two deals of the
+  // same face value can match the same deposit. The ledger refuses the second
+  // booking — correctly — and the bug was reading that refusal as "this leg is
+  // already done" and marking it settled with nothing booked.
+  it("evidence that belongs to ANOTHER leg is refused, not mistaken for a duplicate", async () => {
+    const first = await anInvoice();
+    const second = await anInvoice();
+    const shared = `demo:shared-${crypto.randomUUID()}`;
+
+    // The first leg legitimately settles on this reference.
+    const a = await settleLeg(db, spec(first), () => instantRail(shared));
+    expect(a.status).toBe("settled");
+    expect(await countEvents(first)).toBe(1);
+
+    // A second, different leg whose rail hands back the SAME reference.
+    const before = await balances(db);
+    const b = await settleLeg(db, spec(second), () => instantRail(shared));
+
+    expect(b.status).toBe("failed");
+    expect((b as { reason: string }).reason).toMatch(/already settled a different leg|belongs to another/);
+    // Nothing booked, nothing moved, and the row says failed — NOT settled.
+    expect(await countEvents(second)).toBe(0);
+    expect(await balances(db)).toEqual(before);
+    const [row] = await pendingRowsFor(second);
+    expect(row.status).toBe("failed");
+  });
+
   it("the in-flight key is the SAME key the ledger uses — one guard, not two", () => {
     expect(idempotencyKeyFor("disbursement", "abc")).toBe("disbursement:abc");
   });
