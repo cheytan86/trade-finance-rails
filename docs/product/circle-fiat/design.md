@@ -721,23 +721,34 @@ failing, but a rail answering about somebody else's money.
 
 ## Open decisions, recorded rather than defaulted
 
-**1 · The eval plan's case 5(b) wording.** It reads "leaves a durable
-**pending** row". A3's three-outcome `verify` later made a throwing `verify`
-*fail* the leg — a mismatch must stay loud. The row is durable and carries the
-reference either way, so FIX 1 holds; the word `pending` no longer does.
-Graded PARTIAL in `evals.md` rather than re-graded here. **Chetan's call:**
-amend to "durable row", or leave the partial standing as a record of the
-drift.
+**1 · The eval plan's case 5(b) wording. DECIDED 2026-09-21 (Chetan): amend.**
+The case now reads "a durable row" — see §Eval plan, case 5. The PARTIAL grade
+in `evals.md` STANDS as the record of the run that found the drift; amending
+the case does not retroactively re-grade the evidence, and a file that read
+4/5 pass with no trace of the disagreement would be worth less.
 
-**2 · Which moment is the repayment date.** Today the ledger records when
-Circle confirmed. The debtor discharged their obligation when their bank sent
-the money — `pending_settlements.initiated_at` is the closer proxy, and the
-real answer is the value date, which we do not hold. Immaterial in a sandbox
-where confirmation takes seconds; material when a wire takes three days and
-overdue interest is borne by the supplier's residual. Touches cycle 3's
-reconciliation scope. **Undecided.**
+**2 · Which moment is the repayment date. DECIDED 2026-09-21 (Chetan): the
+date the PLATFORM RECEIVES the money** — which is what the ledger already
+records, so the current behaviour is correct and this stops being an open
+question. The reasoning that makes it defensible: the platform can only
+evidence what it actually received, and a claimed send date is the debtor's
+assertion rather than a fact this system can verify.
 
-**3 · A confirmation step between pricing and funding.** Chetan's feedback
+**The consequence is recorded rather than hidden**, because it falls on a
+party who did nothing wrong: a debtor who pays on time through a bank that
+takes three days is recorded as three days late, and the overdue interest for
+those days is borne by the SUPPLIER'S residual (cycle 1's rule). The supplier
+pays for the rail being slow. That is a defensible position for a platform
+that settles in minutes and an uncomfortable one for a platform settling by
+wire — so cycle 3, which builds reconciliation, should revisit whether a
+value date supplied by the debtor's bank can be captured and trusted.
+
+**3 · Deferrals to cycle 3, CONFIRMED 2026-09-21 (Chetan).** The inbound
+amount-and-window matching collision, the unreconciled deposit `99bea655`, the
+page that never learns money moved, and the value-date question above all land
+in cycle 3's reconciliation scope rather than being patched here.
+
+**4 · A confirmation step between pricing and funding.** Chetan's feedback
 during case 1: pricing applies immediately and Fund becomes available at once;
 there should be an explicit "these terms are correct" gate first. Not built,
 deliberately — a real gate needs a state, and `src/lib/domain/states.ts`
