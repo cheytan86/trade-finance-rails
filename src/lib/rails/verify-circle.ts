@@ -83,9 +83,18 @@ export function matchInboundDeposit(
   deposits: CircleDeposit[],
   expected: ExpectedMovement,
   initiatedAt: Date,
+  /**
+   * Rail references already recorded in `settlement_events.evidence_ref` —
+   * cycle 3. A deposit that has already settled something is not a candidate
+   * for anything, and the filter never used to ask: a spent deposit went on
+   * colliding with every later leg of the same amount, manufacturing
+   * ambiguity out of money that was already accounted for.
+   */
+  spent: ReadonlySet<string> = new Set(),
 ): VerifyOutcome {
   const candidates = deposits.filter((d) => {
     if (d.status === "failed") return false;
+    if (spent.has(d.id)) return false;
     if (d.amount.currency !== expected.currency) return false;
     let minor: bigint;
     try {
@@ -103,10 +112,25 @@ export function matchInboundDeposit(
     return { status: "pending", detail: "No matching deposit has arrived yet." };
   }
   if (candidates.length > 1) {
-    throw new RailError(
-      "rail-ambiguous-match",
-      `${candidates.length} deposits of this exact amount arrived in this window and cannot be told apart. Nothing has been booked — this is a reconciliation exception (cycle 3).`,
-    );
+    // FIX B (cycle 3). The refusal to guess is unchanged and correct — picking
+    // either one would book real money against the wrong invoice. What changed
+    // is what the refusal COSTS.
+    //
+    // This used to throw. `completeSettlement` catches every throw as a
+    // mismatch and calls markFailed(), and `failed` is terminal — so an
+    // ambiguity killed a leg that nothing was wrong with. The money had
+    // arrived, twice over, and one of those deposits WAS this leg's. Worse, a
+    // retry opens a leg whose window starts now, so both deposits fall outside
+    // it and the money becomes matchable by nothing. That is how deposit
+    // 99bea655 was orphaned.
+    //
+    // `pending` already means exactly the right thing: book nothing, fail
+    // nothing, stay in flight. The leg survives, the money stays visible, and
+    // a person resolves it in the reconciliation queue.
+    return {
+      status: "pending",
+      detail: `${candidates.length} deposits of this exact amount arrived in this window and cannot be told apart. Nothing has been booked — a person must match this one by hand.`,
+    };
   }
 
   const [d] = candidates;

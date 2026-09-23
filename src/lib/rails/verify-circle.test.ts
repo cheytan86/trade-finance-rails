@@ -144,9 +144,55 @@ describe("an inbound deposit is recognised, not looked up", () => {
   it("REFUSES two identical deposits rather than guessing which one this is", () => {
     // The honest failure of amount-matching, and the reason cycle 3 exists.
     // Picking either one would book real money against the wrong invoice.
-    expect(() =>
-      matchInboundDeposit([deposit(), deposit({ id: "a-second-one" })], inbound, initiated),
-    ).toThrow(/cannot be told apart/);
+    const out = matchInboundDeposit(
+      [deposit(), deposit({ id: "a-second-one" })],
+      inbound,
+      initiated,
+    );
+    expect(out.status).toBe("pending");
+    expect(out.status === "pending" && out.detail).toMatch(/cannot be told apart/);
+  });
+
+  it("FIX B — an ambiguity leaves the leg alive, because nothing failed", () => {
+    // What changed at cycle 3 is not the refusal, it is its cost. This used to
+    // throw; completeSettlement catches every throw as a mismatch and marks
+    // the leg `failed`, which is terminal — so an ambiguity killed a leg that
+    // nothing was wrong with, while the money sat there. `pending` means book
+    // nothing, fail nothing, stay in flight, which is exactly right.
+    const out = matchInboundDeposit(
+      [deposit(), deposit({ id: "a-second-one" })],
+      inbound,
+      initiated,
+    );
+    expect(out.status).not.toBe("failed");
+    expect(out.status).not.toBe("settled");
+    // And it tells a person what to do rather than only what went wrong.
+    expect(out.status === "pending" && out.detail).toMatch(/by hand/);
+  });
+
+  it("A3 — a deposit that already settled something is not a candidate again", () => {
+    // Without this, a spent deposit goes on colliding with every later leg of
+    // the same amount, manufacturing ambiguity out of money already accounted
+    // for. With it, the one unspent deposit matches cleanly.
+    const spent = new Set(["dep-1"]);
+    const out = matchInboundDeposit(
+      [deposit({ id: "dep-1" }), deposit({ id: "dep-2" })],
+      inbound,
+      initiated,
+      spent,
+    );
+    expect(out.status).toBe("settled");
+    expect(out.status === "settled" && out.transfer.reference).toBe("dep-2");
+  });
+
+  it("A3 — when every candidate is spent, it is pending, not a false match", () => {
+    const out = matchInboundDeposit(
+      [deposit({ id: "dep-1" })],
+      inbound,
+      initiated,
+      new Set(["dep-1"]),
+    );
+    expect(out.status).toBe("pending");
   });
 
   it("does not match a failed deposit", () => {

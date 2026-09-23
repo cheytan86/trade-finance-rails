@@ -23,8 +23,8 @@ const HAS_DB = Boolean(process.env.DATABASE_URL);
 const { getDb } = await import("@/db/client");
 const { invoices, accounts, parties, pendingSettlements, settlementEvents, ledgerEntries } =
   await import("@/db/schema");
-const { balances } = await import("@/lib/ledger");
-const { settleLeg, completeSettlement, openPending, idempotencyKeyFor, SettlementError } =
+const { balances, bookMovement } = await import("@/lib/ledger");
+const { settleLeg, completeSettlement, openPending, idempotencyKeyFor, matchKeyFor, SettlementError } =
   await import("./pending");
 
 const db = getDb();
@@ -376,6 +376,101 @@ describe.skipIf(!HAS_DB)("one leg is never in flight twice", () => {
 
   it("the in-flight key is the SAME key the ledger uses — one guard, not two", () => {
     expect(idempotencyKeyFor("disbursement", "abc")).toBe("disbursement:abc");
+  });
+});
+
+describe.skipIf(!HAS_DB)("FIX A — one leg may receive more than one movement", () => {
+  // THE CURRENT BEHAVIOUR, PINNED FIRST. The delta is only provable against a
+  // recorded `before`, and this one is not a bug in anybody's code — it is a
+  // unique index doing exactly what cycle 2 asked of it.
+  it("PINS THE DEFECT: the gate key allows a leg exactly one movement", async () => {
+    const invoiceId = await anInvoice();
+    const key = idempotencyKeyFor("repayment", invoiceId);
+
+    await bookMovement(db, {
+      invoiceId,
+      type: "repayment",
+      evidenceKind: "circle-payment-id",
+      evidenceRef: `dep-first-${invoiceId}`,
+      idempotencyKey: key,
+      entries: balancedEntries(),
+    });
+
+    // A part payment is one leg taking a SECOND movement. Under the gate key,
+    // Postgres refuses it before any application code gets a say — which is
+    // why eval case 2 could not pass against the schema as it stood.
+    await expect(
+      bookMovement(db, {
+        invoiceId,
+        type: "repayment",
+        evidenceKind: "circle-payment-id",
+        evidenceRef: `dep-second-${invoiceId}`,
+        idempotencyKey: key,
+        entries: balancedEntries(),
+      }),
+    ).rejects.toThrow(/already recorded/i);
+
+    expect(await countEvents(invoiceId)).toBe(1);
+  });
+
+  it("THE DELTA: keyed on the payment, the same leg takes two movements", async () => {
+    const invoiceId = await anInvoice();
+
+    await bookMovement(db, {
+      invoiceId,
+      type: "repayment",
+      evidenceKind: "circle-payment-id",
+      evidenceRef: `part-a-${invoiceId}`,
+      idempotencyKey: matchKeyFor(`part-a-${invoiceId}`),
+      entries: balancedEntries(),
+    });
+    await bookMovement(db, {
+      invoiceId,
+      type: "repayment",
+      evidenceKind: "circle-payment-id",
+      evidenceRef: `part-b-${invoiceId}`,
+      idempotencyKey: matchKeyFor(`part-b-${invoiceId}`),
+      entries: balancedEntries(),
+    });
+
+    expect(await countEvents(invoiceId)).toBe(2);
+  });
+
+  it("but ONE PAYMENT is still spent exactly once — even across different legs", async () => {
+    // Strictly stronger than the leg-scoped key it replaces: a leg-scoped key
+    // would have let the same money settle two different invoices.
+    const first = await anInvoice();
+    const second = await anInvoice();
+    const reference = `shared-deposit-${first}`;
+
+    await bookMovement(db, {
+      invoiceId: first,
+      type: "repayment",
+      evidenceKind: "circle-payment-id",
+      evidenceRef: reference,
+      idempotencyKey: matchKeyFor(reference),
+      entries: balancedEntries(),
+    });
+
+    await expect(
+      bookMovement(db, {
+        invoiceId: second,
+        type: "repayment",
+        evidenceKind: "circle-payment-id",
+        evidenceRef: reference,
+        idempotencyKey: matchKeyFor(reference),
+        entries: balancedEntries(),
+      }),
+    ).rejects.toThrow(/already recorded|duplicate|unique/i);
+
+    expect(await countEvents(second)).toBe(0);
+  });
+
+  it("the two namespaces cannot collide", () => {
+    // `match:` is not a leg type, so no gate key can ever equal a match key.
+    expect(matchKeyFor("abc")).toBe("match:abc");
+    expect(idempotencyKeyFor("repayment", "abc")).toBe("repayment:abc");
+    expect(matchKeyFor("abc")).not.toBe(idempotencyKeyFor("repayment", "abc"));
   });
 });
 

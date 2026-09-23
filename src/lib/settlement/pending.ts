@@ -94,9 +94,41 @@ export function parseStoredEntries(raw: unknown): EntryInput[] {
   });
 }
 
-/** The key both guards share: one leg, one movement, one in-flight row. */
+/** The key both guards share: one leg, one movement, one in-flight row.
+ *
+ *  UNCHANGED, and deliberately so. This governs the GATE and WEBHOOK path,
+ *  where exactly one automatic movement per leg is the correct rule and a
+ *  double-click must be refused by Postgres rather than by hope. */
 export function idempotencyKeyFor(type: LegType, invoiceId: string): string {
   return `${type}:${invoiceId}`;
+}
+
+/**
+ * FIX A (cycle 3) — the key a HAND-ATTRIBUTED movement books under.
+ *
+ * THE PROBLEM IT SOLVES. `settlement_events.idempotency_key` is unique, and
+ * the gate key is `${type}:${invoiceId}` — so one leg could take exactly one
+ * movement, ever. A part payment is one leg taking two, which Postgres
+ * therefore forbade before any code ran. Eval case 2 could not pass.
+ *
+ * THE KEY IS REPLACED, NEVER REMOVED. Keying on the PAYMENT rather than the
+ * leg inverts the guarantee into the one this path actually needs:
+ *
+ *   gate / webhook   `${type}:${invoiceId}`    one automatic booking per leg
+ *   hand-attribution `match:${reference}`      one payment spent once, EVER
+ *
+ * The two namespaces cannot collide — `match:` is not a leg type. And the
+ * guarantee is strictly stronger than a leg-scoped one for this path: the same
+ * payment cannot be booked twice against DIFFERENT legs either, which a
+ * leg-scoped key would have allowed.
+ *
+ * WHAT STILL STOPS OVER-APPLICATION is not this key but the outstanding-amount
+ * check (`refuseAttribution`, feature folder). Those are two different guards
+ * and both are load-bearing: this one stops the same money booking twice, that
+ * one stops more money booking than is owed.
+ */
+export function matchKeyFor(paymentReference: string): string {
+  return `match:${paymentReference}`;
 }
 
 /**

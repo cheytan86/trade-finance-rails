@@ -59,8 +59,28 @@ drizzle/0007_*.sql                         ONLY after per-change re-approval
  9. src/app/ops/page.tsx            the flag-gated link and unattributed count
 ```
 
-**Nine files. Anything else is a stop-and-ask, including a shared component,
+```text
+10. src/lib/rails/verify-circle.test.ts    FIX B — the ambiguity assertion moves
+                                           from `throws` to `pending with a
+                                           reason`. The refusal to guess is
+                                           RE-ASSERTED, never removed.
+11. src/lib/settlement/pending.test.ts     FIX A — pin that one leg can take one
+                                           movement today, then prove the new
+                                           key permits a second
+12. src/lib/rails/circle.test.ts           only if matchInboundDeposit's
+                                           signature change ripples
+```
+
+**Twelve files. Anything else is a stop-and-ask, including a shared component,
 a config, or a dependency. "It would be cleaner" is never sufficient.**
+
+*Items 10–12 added 2026-09-23, on Chetan's approval, as a stop-and-ask raised
+mid-A2.* **This was a gap in the design's contract rather than a discovery
+about the code:** the allow-list named nine source files and never named their
+tests, but a FIX by definition changes behaviour existing tests assert, so
+every FIX in this cycle implies touching the test beside it. The standing rule
+for these three: **a refusal may be re-asserted or strengthened, never
+deleted.** A FIX that makes a test disappear is a FIX that removed a guard.
 
 ### Untouchable
 
@@ -131,3 +151,13 @@ npm run build        succeeds — 10 routes, all dynamic
 | Gate 0 | baseline recorded | — | ✅ 2026-09-23 |
 | Gate 0.5 | contract verified, rails set | `.env.example`, this manifest, `AGENTS.md` | ✅ 2026-09-23 |
 | A1 | the world — inbound payment shape + fixtures for all five eval cases | **new:** `fixtures/payments.ts`, `fixtures/legs.ts`, `fixtures/index.ts`, `fixtures/fixtures.test.ts` · **modified:** `src/lib/rails/types.ts` (allow-list 2) | ✅ 2026-09-23 · 210 tests |
+| A2 | states and transitions — the derived state model, FIX A, FIX B, A3 | **new:** `attribution.ts`, `attribution.test.ts` · **modified:** `verify-circle.ts` (7), `pending.ts` (8), `verify-circle.test.ts` (10), `pending.test.ts` (11) | ✅ 2026-09-23 · 237 tests · build ✓ |
+
+### Built but NOT YET WIRED, as at A2
+
+`matchInboundDeposit`'s `spent` parameter defaults to an empty set, and
+`circle.ts:155` still calls it without one. The filter is **tested and inert**:
+A3's benefit is not realised in production until a caller passes the real
+`settlement_events.evidence_ref` set, which needs a database query and
+therefore belongs with the queries module. Recorded here so "A3 done" is not
+read off the test file.
