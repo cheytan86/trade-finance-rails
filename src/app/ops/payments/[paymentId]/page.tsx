@@ -27,6 +27,7 @@ import { seatGate } from "@/lib/roles/gate";
 import { loadPayment } from "@/lib/reconciliation/queue";
 import { loadCandidates } from "@/lib/reconciliation/candidates";
 import { railFor } from "@/lib/rails";
+import { PaymentAttributeForm } from "@/components/payment-attribute-form";
 
 export const dynamic = "force-dynamic";
 
@@ -188,14 +189,26 @@ export default async function PaymentDetail({
                     <Td>
                       {c.refusal ? (
                         <span className="text-[12.5px] text-refuse">{c.refusal.message}</span>
-                      ) : (
-                        // A5 builds the gate itself: a ConfirmDialog showing
-                        // the exact entries and their sum before anything
-                        // books. Until then the screen informs and does not
-                        // act — no half-built write path.
-                        <span className="text-[12.5px] text-muted">
-                          available — the confirm step lands next
+                      ) : c.displayEntries.length === 0 ? (
+                        // The split would invent a penny. The action refuses
+                        // this, so the gate must not offer it.
+                        <span className="text-[12.5px] text-refuse">
+                          This amount cannot be split across the leg&rsquo;s entries without
+                          inventing a penny.
                         </span>
+                      ) : (
+                        <PaymentAttributeForm
+                          reference={payment.reference}
+                          legId={c.leg.id}
+                          legType={c.leg.type}
+                          dealLabel={`${c.invoice.supplier} → ${c.invoice.debtor}`}
+                          amountMinor={c.wouldMoveMinor.toString()}
+                          entries={c.displayEntries}
+                          // More than one leg fits → a reason is REQUIRED.
+                          // "Ops picked one" is the audit answer this cycle
+                          // exists to prevent.
+                          reasonRequired={open.length > 1}
+                        />
                       )}
                     </Td>
                   </tr>

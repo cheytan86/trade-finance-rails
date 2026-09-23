@@ -166,6 +166,7 @@ npm run build        succeeds — 10 routes, all dynamic
 | A2 | states and transitions — the derived state model, FIX A, FIX B, A3 | **new:** `attribution.ts`, `attribution.test.ts` · **modified:** `verify-circle.ts` (7), `pending.ts` (8), `verify-circle.test.ts` (10), `pending.test.ts` (11) | ✅ 2026-09-23 · 237 tests · build ✓ |
 | smoke | the spine walked on the fiat rail after A2 touched two money-path files | deal `9cc15acd`, face 200.00 → `settled`, five legs, **all five booked unattended** (`applied=5`), `client_collections` 0.00, net 0.00 | ✅ 2026-09-23 · Chetan |
 | schema | `unapplied` account kind · `attribution_reason` enum · `inbound_payments` table · `unapplied` added to CLIENT_MONEY_KINDS | **new:** `drizzle/0007_reconciliation.sql` · **modified:** `src/db/schema.ts` (1), `drizzle/meta/_journal.json`, **`src/lib/ledger/index.ts` (untouchable — one line, on Chetan's explicit approval)** | ✅ 2026-09-23 · applied to the live database and read back |
+| A5 | the human gate and the write — the attribution action | **new:** `src/lib/reconciliation/actions.ts`, `src/lib/reconciliation/booked.ts`, `src/components/payment-attribute-form.tsx` · **modified:** `candidates.ts`, `/ops/payments/[paymentId]/page.tsx` (both mine) | ✅ 2026-09-23 · 237 tests · build ✓ |
 | A4 | the permission gate + the flag-gated ops index link | **modified:** `src/app/ops/page.tsx` (9) | ✅ 2026-09-23 · flag-off and wrong-seat both proved by curl |
 | A3b | the attribution screen — candidates, refusals, no ranking | **new:** `src/lib/reconciliation/candidates.ts`, `src/app/ops/payments/[paymentId]/page.tsx` · **modified:** `attribution.ts`, `fixtures/legs.ts`, `fixtures/payments.ts`, `queue.ts` (all feature-folder / new) | ✅ 2026-09-23 · 237 tests · build ✓ 12 routes |
 | A3a | the rail capability + the queue | **new:** `src/lib/reconciliation/queue.ts`, `src/components/payment-state-pill.tsx`, `src/app/ops/payments/page.tsx` · **modified:** `types.ts` (2), `circle.ts` (3), `usdc.ts` (4), `demo-internal.ts` (5), `pending.test.ts` (11), `scripts/eval-circle-fiat.mts` (13) | ✅ 2026-09-23 · 237 tests · build ✓ · live: 17 payments, 5 unattributed, $50,143.25 |
@@ -183,6 +184,25 @@ unapplied cash is emphatically client money: somebody paid it and it is not the
 platform's. The first part payment to book would have rendered as platform
 funds. **`bookMovement` was not touched** — this cycle still adds no new way to
 book.
+
+### Case C is deferred, by name (2026-09-23)
+
+The design's C2.1 said "a part payment's remainder books to `unapplied`". At
+A5 that turned out to describe something that does not happen: a part payment
+has **no** remainder — the money is fully applied and the LEG is short. A
+leftover only exists on an **over**payment, which is a different case needing
+its own control and its own decision by ops.
+
+**So A5 attributes up to what is owed and stops.** A surplus stays unattributed
+and visible at the rail, which is already correct behaviour. `unapplied` ships
+**unused in slice 1** — a cost named rather than hidden, because `fee_income`,
+`statement-line` and `webhook_outcome.ignored` were all declared-before-used
+and two of them caused real defects. Chetan approved this reading on 2026-09-23.
+
+**The follow-up, named so it is not rediscovered:** an overpayment control —
+`debtor_cash −X / unapplied +X` when the payer is known but the invoice is not.
+It only works when ops can name the counterparty, because double-entry needs
+both sides and "whose money is this?" is the question the exception poses.
 
 ### Built but NOT YET WIRED, as at A2
 

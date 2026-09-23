@@ -19,12 +19,14 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
+  accounts,
   invoices,
   ledgerEntries,
   parties,
   pendingSettlements,
   settlementEvents,
 } from "@/db/schema";
+import { parseStoredEntries } from "@/lib/settlement/pending";
 import type { InboundPayment, RailId } from "@/lib/rails";
 import {
   attributableAmount,
@@ -49,6 +51,11 @@ export interface Candidate {
   wouldMoveMinor: bigint;
   /** Non-null when this leg cannot take this money, with the reason to show. */
   refusal: { rule: string; message: string } | null;
+  /** THE EXACT ENTRIES a full attribution would book, labelled and scaled,
+   *  computed on the SERVER. The gate shows these before anything books —
+   *  and the action recomputes them, so what is displayed is never what is
+   *  trusted. Amounts are strings: bigint cannot cross to the client. */
+  displayEntries: Array<{ label: string; amountMinor: string }>;
 }
 
 /** Movements booked per leg, keyed `${type}:${invoiceId}`. The magnitude is
@@ -125,6 +132,20 @@ export async function loadCandidates(
   const debtorName = new Map(debtorRows.map((d) => [d.id, d.name]));
   const invoiceById = new Map(rows.map((r) => [r.id, r]));
 
+  // Account labels for the gate. An entry that reads "acc-4f2b…" tells a
+  // person nothing, and a gate nobody can read is a gate nobody uses.
+  const accountRows = await db
+    .select({ id: accounts.id, kind: accounts.kind, partyId: accounts.partyId })
+    .from(accounts);
+  const accountLabel = new Map(
+    accountRows.map((a) => [
+      a.id,
+      a.partyId
+        ? `${a.kind} · ${debtorName.get(a.partyId) ?? "—"}`
+        : String(a.kind),
+    ]),
+  );
+
   const candidates: Candidate[] = [];
   for (const leg of legs) {
     const inv = invoiceById.get(leg.invoiceId);
@@ -151,6 +172,11 @@ export async function loadCandidates(
         leg.amountMinor - bookedAgainstLeg.reduce((t, m) => t + m.amountMinor, 0n),
       wouldMoveMinor: attributableAmount(facts),
       refusal: refusal ? { rule: refusal.rule, message: refusal.message } : null,
+      displayEntries: scaledDisplayEntries(
+        leg,
+        attributableAmount(facts),
+        accountLabel,
+      ),
     });
   }
 
@@ -161,4 +187,35 @@ export async function loadCandidates(
     if (Boolean(a.refusal) !== Boolean(b.refusal)) return a.refusal ? 1 : -1;
     return a.invoice.dueDate.localeCompare(b.invoice.dueDate);
   });
+}
+
+/**
+ * The leg's FROZEN entries, scaled to what would actually move, labelled for a
+ * person. Mirrors scaleEntries() in actions.ts deliberately: the gate must show
+ * what the action will book, and the action recomputes it rather than trusting
+ * this. Returns empty when the split would invent a penny — the action refuses
+ * that case, and the gate must not promise it.
+ */
+function scaledDisplayEntries(
+  leg: OpenLeg,
+  toMinor: bigint,
+  label: Map<string, string>,
+): Array<{ label: string; amountMinor: string }> {
+  if (toMinor <= 0n || leg.amountMinor <= 0n) return [];
+  let entries;
+  try {
+    entries = parseStoredEntries(leg.entries);
+  } catch {
+    return [];
+  }
+  const scaled = entries.map((e) => ({
+    accountId: e.accountId,
+    amountMinor: (e.amountMinor * toMinor) / leg.amountMinor,
+  }));
+  if (scaled.reduce((t, e) => t + e.amountMinor, 0n) !== 0n) return [];
+  if (scaled.some((e) => e.amountMinor === 0n)) return [];
+  return scaled.map((e) => ({
+    label: label.get(e.accountId) ?? e.accountId.slice(0, 8),
+    amountMinor: e.amountMinor.toString(),
+  }));
 }
