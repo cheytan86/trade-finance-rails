@@ -17,8 +17,9 @@
 // notification until Deploy found it. A reconciliation screen that can be
 // quietly incomplete is worse than none, because ops will trust it.
 
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { ledgerEntries, settlementEvents } from "@/db/schema";
 import { railFor, type InboundPayment, type RailId } from "@/lib/rails";
 
 export interface QueuedPayment {
@@ -53,26 +54,25 @@ async function bookedByReference(): Promise<
   Map<string, { total: bigint; legs: Array<{ invoiceId: string; legType: string }> }>
 > {
   const db = getDb();
-  const rows = (await db.execute(sql`
-    select se.evidence_ref            as reference,
-           se.invoice_id              as invoice_id,
-           se.type                    as leg_type,
-           coalesce(sum(le.amount_minor) filter (where le.amount_minor > 0), 0) as moved
-    from settlement_events se
-    join ledger_entries le on le.event_id = se.id
-    group by se.evidence_ref, se.invoice_id, se.type
-  `)) as unknown as {
-    rows: Array<{ reference: string; invoice_id: string; leg_type: string; moved: string }>;
-  };
+  const rows = await db
+    .select({
+      reference: settlementEvents.evidenceRef,
+      invoiceId: settlementEvents.invoiceId,
+      legType: settlementEvents.type,
+      moved: sql<string>`coalesce(sum(${ledgerEntries.amountMinor}) filter (where ${ledgerEntries.amountMinor} > 0), 0)`,
+    })
+    .from(settlementEvents)
+    .innerJoin(ledgerEntries, eq(ledgerEntries.eventId, settlementEvents.id))
+    .groupBy(settlementEvents.evidenceRef, settlementEvents.invoiceId, settlementEvents.type);
 
   const out = new Map<
     string,
     { total: bigint; legs: Array<{ invoiceId: string; legType: string }> }
   >();
-  for (const r of rows.rows ?? []) {
+  for (const r of rows) {
     const entry = out.get(r.reference) ?? { total: 0n, legs: [] };
     entry.total += BigInt(r.moved);
-    entry.legs.push({ invoiceId: r.invoice_id, legType: r.leg_type });
+    entry.legs.push({ invoiceId: r.invoiceId, legType: r.legType });
     out.set(r.reference, entry);
   }
   return out;

@@ -6,9 +6,9 @@
 // an exact match, a leg that takes two payments, two legs that cannot be told
 // apart, and a deal with nothing left to pay.
 
-import type { pendingSettlements } from "@/db/schema";
+import type { OpenLeg } from "../attribution.ts";
 
-export type OpenLeg = typeof pendingSettlements.$inferSelect;
+export type { OpenLeg };
 
 function usd(decimal: string): bigint {
   const [whole, frac = ""] = decimal.split(".");

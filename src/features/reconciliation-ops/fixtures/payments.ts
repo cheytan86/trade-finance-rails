@@ -104,6 +104,10 @@ export const PART_PAYMENT_SECOND: InboundPayment = {
  * explicitly the wrong target.
  */
 export const ORPHAN_50K: InboundPayment = {
+  // NOTE: the first 8 characters are the real deposit's; the rest is padding.
+  // UNATTRIBUTED_100 and SPENT_100 carry FULL real ids and can be looked up in
+  // the sandbox. These two cannot — the prefix is for recognition, not for
+  // querying, and assuming otherwise will return nothing.
   reference: "5ec3e2b9-0000-4000-8000-00005ec3e2b9",
   amountMinor: usd("50000.00"),
   currency: "USD",

@@ -21,7 +21,12 @@
 // will work around.
 
 import type { InboundPayment } from "@/lib/rails/types";
-import type { OpenLeg } from "./fixtures/legs.ts";
+import type { pendingSettlements } from "@/db/schema";
+
+/** A leg money could be attributed to, typed from the schema's own row type.
+ *  Declared here rather than beside the fixtures so production code never
+ *  reaches into a fixtures module for a type. */
+export type OpenLeg = typeof pendingSettlements.$inferSelect;
 
 /** One movement already booked, from whichever side it is being counted. */
 export interface BookedMovement {
