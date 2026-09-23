@@ -130,3 +130,4 @@ npm run build        succeeds — 10 routes, all dynamic
 |---|---|---|---|
 | Gate 0 | baseline recorded | — | ✅ 2026-09-23 |
 | Gate 0.5 | contract verified, rails set | `.env.example`, this manifest, `AGENTS.md` | ✅ 2026-09-23 |
+| A1 | the world — inbound payment shape + fixtures for all five eval cases | **new:** `fixtures/payments.ts`, `fixtures/legs.ts`, `fixtures/index.ts`, `fixtures/fixtures.test.ts` · **modified:** `src/lib/rails/types.ts` (allow-list 2) | ✅ 2026-09-23 · 210 tests |

@@ -110,6 +110,47 @@ export type VerifyOutcome =
  *  confirms. */
 export type SettlementMode = "immediate" | "deferred";
 
+/**
+ * MONEY THAT ARRIVED, as the rail itself reports it — cycle 3.
+ *
+ * Deliberately NOT a database row. Amount, arrival time and sender are always
+ * read from the rail, never copied into our tables and trusted: the rail is
+ * the record of what it holds, and a local copy is a second source of truth
+ * about money, which is the ambiguity this cycle exists to remove.
+ *
+ * `reference` is the rail's own id and is what `settlement_events.evidence_ref`
+ * carries once a payment is attributed — so "has this been spent?" is a join,
+ * never a stored flag.
+ */
+export interface InboundPayment {
+  reference: string;
+  amountMinor: bigint;
+  currency: string;
+  /** When the RAIL says the money moved — not when we noticed. Aging needs
+   *  our own first-seen timestamp, which is why one is persisted beside this. */
+  arrivedAt: Date;
+  /** Whatever the rail can say about who sent it. Every field is optional
+   *  because a bank may say nothing useful, and a payment with no sender is
+   *  still fully attributable — the sender is context for a person, never a
+   *  precondition. */
+  sender?: { id?: string; name?: string };
+  /** The rail's own view of finality. Only `complete` may be attributed. */
+  status: "pending" | "complete" | "failed";
+}
+
+/**
+ * WHAT A RAIL SAYS WHEN ASKED WHAT HAS ARRIVED.
+ *
+ * `unsupported` is a first-class answer, not an empty list. On the USDC rail
+ * the platform holds every demo wallet's key and signs AS the counterparty, so
+ * no payment ever arrives from outside and there is nothing to reconcile.
+ * Rendering that as an empty queue would read as "no money arrived", which is
+ * a different statement and a false one.
+ */
+export type InboundListing =
+  | { supported: true; payments: InboundPayment[] }
+  | { supported: false; reason: string };
+
 export interface SettlementRail {
   readonly id: RailId;
   /** Shown wherever the rail is named; the demo must never look production. */
@@ -120,4 +161,7 @@ export interface SettlementRail {
   /** Re-derives the movement from the rail's own records. Returns one of the
    *  three outcomes above; throws RailError with a named rule on a mismatch. */
   verify(req: TransferRequest, receipt: TransferReceipt): Promise<VerifyOutcome>;
+  // cycle 3 adds `listInbound(): Promise<InboundListing>` here, once the three
+  // rails implement it. The shapes above land first so the fixtures can be
+  // typed against the real contract rather than a stand-in.
 }
