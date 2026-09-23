@@ -64,6 +64,62 @@ The cycle's own rules, which do not survive being forgotten:
 
 <!-- END:feature-circle-fiat -->
 
+<!-- BEGIN:feature-reconciliation-ops -->
+
+## Cycle 3 — reconciliation ops, branch `feat/reconciliation-ops`
+
+Boundary: `src/features/reconciliation-ops/MANIFEST.md` is the contract — a
+**nine-file** allow-list plus named new files. ENHANCE with FIX A and FIX B.
+**An unnamed modification is a stop-and-ask.** Flag
+`NEXT_PUBLIC_ENABLE_RECONCILIATION`: absent means off, never an error, checked
+server-side too. **Slice 1 only** (epics A–E); slice 2 is its own Develop run.
+
+The cycle's own rules, which do not survive being forgotten:
+
+- **`src/lib/ledger/index.ts` is READ-ONLY USE.** This cycle adds a new way to
+  DECIDE what books, never a new way to book. Any change there is a
+  stop-and-ask — it is the single most load-bearing line in the contract.
+- **A payment's attribution state is DERIVED, never stored.** `attributed =
+  SUM(movements whose evidence_ref = this payment id)`. A status column would
+  be a fourth place money state lives, and it would drift. Same rule as
+  balances and as `advanceFromBookedLegs`.
+- **Only what cannot be derived is persisted** — first-seen-at (aging is
+  impossible without it: the rail's `createDate` is when the *bank* moved the
+  money, not when we noticed), owner, note. Amount, date and sender always come
+  from the rail. Nothing about the money is copied and trusted.
+- **The queue is built from the RAIL, never from `webhook_deliveries`.** Proven,
+  not preferred: the delivery log's earliest row is 2026-09-18 and two
+  unattributed deposits arrived 2026-09-15. A list built from deliveries
+  *cannot* contain them, and cycle 2 proved the log can be silently incomplete.
+- **A rail that cannot list inbound payments says so.** `usdc` and
+  `demo-internal` declare unsupported; an empty list must never read as "no
+  money arrived".
+- **Ambiguity is parked, never failed, and never guessed.** Two candidates are
+  both shown and neither is ranked. Nothing books until a person picks, and the
+  basis is recorded — a fixed reason set, because *"ops picked one"* is exactly
+  the audit answer this cycle exists to prevent.
+- **Never more than what is outstanding, and one payment is spent once.** These
+  are two different guards. Before part payments "has this leg settled?" was
+  yes/no; with them it is an amount. Both hold **at the server**, not only in a
+  disabled button — that is the layer a race can reach.
+- **Money is never returned to a sender.** An outbound payout to an account
+  with no registered destination, on the say-so of whoever claims the money is
+  theirs, is the most attractive thing on this screen to an attacker.
+  Unattributable money is parked, not returned.
+- **No agent, and it was conceded rather than argued down.** A Circle deposit
+  carries nine fields and no free text. Exact `source.id` + exact amount; no
+  fuzzy names, no scoring, no model call.
+- **Reversals are OUT** — their own cycle, with credit loss. `states.ts` stays
+  byte-identical; nothing moves a booked deal backwards.
+- Inherited and still binding: money is bigint minor units · balances derived,
+  never stored · `src/lib/ledger` is the only writer and entries sum to zero ·
+  the browser posts decisions, never results · identity is read only through
+  `getIdentity()` · migrations 0000–0006 are never edited · no mainnet, ever ·
+  Circle's key is server-side, never `NEXT_PUBLIC_`, never echoed · commit only
+  on Chetan's confirmation of a prompt; push only when asked.
+
+<!-- END:feature-reconciliation-ops -->
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
