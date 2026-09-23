@@ -123,6 +123,11 @@ export const CLIENT_MONEY_KINDS = [
   "client_collections",
   "supplier_payable",
   "debtor_cash",
+  // cycle 3: money that ARRIVED and is not yet attributed to a deal. Somebody
+  // paid it and it is emphatically not the platform's, so leaving it out would
+  // not merely miss a label — it would make this file's own assertion quietly
+  // wrong the moment the first part payment books.
+  "unapplied",
 ] as const;
 
 export const PLATFORM_OWN_KINDS = ["platform_operating", "fee_income"] as const;

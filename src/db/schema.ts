@@ -86,6 +86,28 @@ export const accountKind = pgEnum("account_kind", [
   // funder's interest stays in client_collections until payout — it never
   // touches a platform account, because it was never the platform's.
   "platform_operating", // the platform's own
+  // cycle 3: money that has ARRIVED but is not yet attributed to a deal. It is
+  // CLIENT MONEY — somebody paid it and it is not the platform's — which is
+  // why isClientMoney() must know about it. Appended rather than inserted:
+  // Postgres orders enum values by creation, and the client-money split is
+  // carried in comments and in src/lib/ledger, never by position.
+  "unapplied", // client money
+]);
+
+/**
+ * WHY OPS CHOSE THIS LEG — cycle 3, and a fixed set rather than free text.
+ *
+ * The escalation ladder is a policy (ask the payer, then the supplier, then
+ * earliest maturity), and a fixed set is what makes "was it followed?"
+ * answerable. Free text cannot be reported on and cannot prove the ladder was
+ * walked. "Ops picked one" is exactly the audit answer this cycle exists to
+ * prevent — the optional note beside this carries everything else.
+ */
+export const attributionReason = pgEnum("attribution_reason", [
+  "payer-confirmed",
+  "supplier-confirmed",
+  "earliest-maturity",
+  "other",
 ]);
 
 export const settlementEventType = pgEnum("settlement_event_type", [
@@ -350,6 +372,48 @@ export const settlementDestinations = pgTable(
       .on(t.partyId, t.rail)
       .nullsNotDistinct(),
   ],
+);
+
+/**
+ * WHAT WE KNOW ABOUT A PAYMENT THAT THE RAIL CANNOT TELL US — cycle 3.
+ *
+ * Deliberately NOT a copy of the payment. Amount, arrival time and sender
+ * always come from the rail: it is the record of what it holds, and a local
+ * copy would be a second source of truth about money, which is precisely the
+ * ambiguity this cycle exists to remove. There is no `status` column either —
+ * attribution is DERIVED by summing movements booked against the payment's
+ * reference, the same rule that keeps balances out of columns.
+ *
+ * So this table holds exactly three facts, and each one is a fact only a
+ * person or this product can supply:
+ *
+ *   first_seen_at  WHEN WE NOTICED. The load-bearing one. The rail's
+ *                  createDate is when the BANK moved the money; aging from it
+ *                  and calling the result "how long this has been open" would
+ *                  be measuring one thing while claiming another.
+ *   owner          who is accountable for resolving it.
+ *   note + reason  what a person decided, and on what basis.
+ */
+export const inboundPayments = pgTable(
+  "inbound_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    rail: settlementRail("rail").notNull(),
+    /** The rail's own id. NOT a foreign key — the payment lives in Circle's
+     *  database, not ours. */
+    externalId: text("external_id").notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** A hand-typed label until accounts mode (cycle 4a) gives this product
+     *  real users. "Priya" is a good answer today; a foreign key to a user
+     *  table that does not exist would not be. */
+    owner: text("owner"),
+    note: text("note"),
+    resolutionReason: attributionReason("resolution_reason"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("inbound_payments_rail_external").on(t.rail, t.externalId)],
 );
 
 export const webhookOutcome = pgEnum("webhook_outcome", [
