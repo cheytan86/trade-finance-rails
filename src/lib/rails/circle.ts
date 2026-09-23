@@ -27,6 +27,7 @@ import {
   type TransferReceipt,
   type TransferRequest,
   type VerifyOutcome,
+  type InboundListing,
 } from "./types.ts";
 import {
   createMockWire,
@@ -36,6 +37,7 @@ import {
   listDeposits,
   listWireAccounts,
   minorToDecimal,
+  decimalToMinor,
   circleIdempotencyKey,
 } from "./circle-client.ts";
 import { matchInboundDeposit, verifyCirclePayout } from "./verify-circle.ts";
@@ -157,6 +159,40 @@ export const circleFiatRail: SettlementRail = {
 
     const payout = await getPayout(receipt.reference);
     return verifyCirclePayout(payout, { ...expected, destinationId: req.toRef });
+  },
+
+  /**
+   * EVERYTHING CIRCLE HOLDS FOR US — cycle 3, and the list was already being
+   * fetched.
+   *
+   * `verify` has called `listDeposits()` on every status check since cycle 2,
+   * kept the one deposit matching an open leg, and discarded the rest in
+   * memory. So four of the five exceptions this cycle handles were never
+   * "unhandled" — they were INVISIBLE, thrown away microseconds after arriving.
+   * This method is the same call, keeping what it was already given.
+   *
+   * Nothing is persisted here and nothing is interpreted: amount, arrival time
+   * and sender are reported exactly as Circle states them. Whether a payment
+   * has been spent is a question for the ledger, not for this list.
+   */
+  async listInbound(): Promise<InboundListing> {
+    const deposits = await listDeposits();
+    return {
+      supported: true,
+      payments: deposits.map((d) => ({
+        reference: d.id,
+        // Circle's decimal string is the record; decimalToMinor refuses
+        // anything it cannot represent exactly rather than rounding money.
+        amountMinor: decimalToMinor(d.amount.amount),
+        currency: d.amount.currency,
+        arrivedAt: new Date(d.createDate),
+        // Optional at both ends: Circle may omit `source`, and in this sandbox
+        // every deposit carries the SAME sender id because one bank account is
+        // registered. The sender is context for a person, never a precondition.
+        sender: d.source ? { id: d.source.id, name: d.source.name } : undefined,
+        status: d.status,
+      })),
+    };
   },
 };
 

@@ -127,6 +127,13 @@ function scriptedRail(outcomes: VerifyOutcome[], reference = "circle:scripted"):
     id: "circle-fiat",
     label: "Circle sandbox (scripted, eval harness)",
     settlement: "deferred",
+    // cycle 3: the interface gained listInbound(). This harness drives deals
+    // through scripted verify() outcomes and never asks a rail what has
+    // arrived, so it declares unsupported rather than pretending to a queue.
+    listInbound: async () => ({
+      supported: false as const,
+      reason: "scripted eval harness — no rail is consulted for inbound money",
+    }),
     prepare: async () => ({
       rail: "circle-fiat",
       amountMinor: 1_000n,

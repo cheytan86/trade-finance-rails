@@ -14,6 +14,7 @@ import {
   type TransferPreview,
   type TransferReceipt,
   type TransferRequest,
+  type InboundListing,
   type VerifyOutcome,
 } from "./types.ts";
 import { demoWallet, demoWalletAddress, type WalletActor } from "./wallets.ts";
@@ -185,6 +186,28 @@ export const usdcRail: SettlementRail = {
         to,
         explorerUrl: `${EXPLORER}/tx/${receipt.reference}`,
       },
+    };
+  },
+
+  /**
+   * UNSUPPORTED, and the reason is structural rather than missing work.
+   *
+   * The platform holds every demo wallet's private key and signs AS the
+   * counterparty (see execute above: `demoWallet(req.from)`). A debtor
+   * "paying" is the platform moving its own money from one pocket to another,
+   * so no payment ever arrives from outside and there is nothing to discover.
+   *
+   * A real third-party inbound path on this rail would watch ERC-20 Transfer
+   * logs where `to` is the platform address — and would be BETTER than fiat,
+   * because every transfer carries an exact sender address rather than a
+   * bank-formatted name. That is a later cycle; claiming an empty queue today
+   * would be claiming we looked.
+   */
+  async listInbound(): Promise<InboundListing> {
+    return {
+      supported: false,
+      reason:
+        "On the USDC rail the platform signs as the counterparty, so no payment arrives from outside. Third-party inbound would mean watching Transfer logs — a later cycle.",
     };
   },
 };

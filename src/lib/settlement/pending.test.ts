@@ -47,6 +47,11 @@ const instantRail = (ref = "demo:ok"): SettlementRail => ({
     onChain: false,
   }),
   execute: async () => ({ reference: ref }),
+  // cycle 3: the interface gained listInbound(). A demo rail has no outside.
+  listInbound: async () => ({
+    supported: false as const,
+    reason: "test rail",
+  }),
   verify: async () => ({
     status: "settled",
     transfer: {

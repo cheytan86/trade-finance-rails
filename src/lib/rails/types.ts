@@ -161,7 +161,17 @@ export interface SettlementRail {
   /** Re-derives the movement from the rail's own records. Returns one of the
    *  three outcomes above; throws RailError with a named rule on a mismatch. */
   verify(req: TransferRequest, receipt: TransferReceipt): Promise<VerifyOutcome>;
-  // cycle 3 adds `listInbound(): Promise<InboundListing>` here, once the three
-  // rails implement it. The shapes above land first so the fixtures can be
-  // typed against the real contract rather than a stand-in.
+  /**
+   * EVERYTHING THE RAIL HOLDS FOR US, attributed or not — cycle 3.
+   *
+   * Note what this is NOT: it is not "the legs we are waiting for". Every
+   * other method on this interface starts from a movement the product already
+   * knows about. This one starts from the rail's own record and asks what is
+   * there, which is the only way money nobody expected can ever be seen.
+   *
+   * A rail where money never arrives from outside answers `unsupported` and
+   * the screen says so — an empty list would read as "no money arrived", which
+   * is a different statement and a false one.
+   */
+  listInbound(): Promise<InboundListing>;
 }

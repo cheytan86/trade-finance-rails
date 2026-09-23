@@ -12,6 +12,7 @@ import {
   type TransferReceipt,
   type TransferRequest,
   type VerifyOutcome,
+  type InboundListing,
 } from "./types.ts";
 
 const LABELS: Record<TransferRequest["from"], string> = {
@@ -65,6 +66,17 @@ export const demoInternalRail: SettlementRail = {
         from: LABELS[req.from],
         to: LABELS[req.to],
       },
+    };
+  },
+
+  /** Nothing external ever moves on this rail — the "transfer" is an
+   *  accounting fact the platform asserts about itself. There is no outside
+   *  for money to arrive from, so there is nothing to reconcile. */
+  async listInbound(): Promise<InboundListing> {
+    return {
+      supported: false,
+      reason:
+        "demo-internal money never leaves the platform's own books, so no payment arrives from outside and there is nothing to reconcile.",
     };
   },
 };

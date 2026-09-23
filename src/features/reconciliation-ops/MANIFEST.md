@@ -69,10 +69,22 @@ drizzle/0007_*.sql                         ONLY after per-change re-approval
                                            key permits a second
 12. src/lib/rails/circle.test.ts           only if matchInboundDeposit's
                                            signature change ripples
+13. scripts/eval-circle-fiat.mts           cycle 2's eval harness holds a stub
+                                           rail; adding listInbound() to the
+                                           interface makes EVERY implementor
+                                           need it. Four lines, no behaviour
+                                           change — the harness never asks a
+                                           rail what has arrived.
 ```
 
-**Twelve files. Anything else is a stop-and-ask, including a shared component,
+**Thirteen files. Anything else is a stop-and-ask, including a shared component,
 a config, or a dependency. "It would be cleaner" is never sufficient.**
+
+*Item 13 added 2026-09-23 as a second stop-and-ask, during A3. Making
+`listInbound` OPTIONAL was considered and rejected: optional is how a rail ends
+up silently answering "nothing arrived" instead of "I have no outside", which
+is the false statement B1.3 exists to prevent. The interface should force every
+rail to say which it is.*
 
 *Items 10–12 added 2026-09-23, on Chetan's approval, as a stop-and-ask raised
 mid-A2.* **This was a gap in the design's contract rather than a discovery
@@ -152,6 +164,8 @@ npm run build        succeeds — 10 routes, all dynamic
 | Gate 0.5 | contract verified, rails set | `.env.example`, this manifest, `AGENTS.md` | ✅ 2026-09-23 |
 | A1 | the world — inbound payment shape + fixtures for all five eval cases | **new:** `fixtures/payments.ts`, `fixtures/legs.ts`, `fixtures/index.ts`, `fixtures/fixtures.test.ts` · **modified:** `src/lib/rails/types.ts` (allow-list 2) | ✅ 2026-09-23 · 210 tests |
 | A2 | states and transitions — the derived state model, FIX A, FIX B, A3 | **new:** `attribution.ts`, `attribution.test.ts` · **modified:** `verify-circle.ts` (7), `pending.ts` (8), `verify-circle.test.ts` (10), `pending.test.ts` (11) | ✅ 2026-09-23 · 237 tests · build ✓ |
+| smoke | the spine walked on the fiat rail after A2 touched two money-path files | deal `9cc15acd`, face 200.00 → `settled`, five legs, **all five booked unattended** (`applied=5`), `client_collections` 0.00, net 0.00 | ✅ 2026-09-23 · Chetan |
+| A3a | the rail capability + the queue | **new:** `src/lib/reconciliation/queue.ts`, `src/components/payment-state-pill.tsx`, `src/app/ops/payments/page.tsx` · **modified:** `types.ts` (2), `circle.ts` (3), `usdc.ts` (4), `demo-internal.ts` (5), `pending.test.ts` (11), `scripts/eval-circle-fiat.mts` (13) | ✅ 2026-09-23 · 237 tests · build ✓ · live: 17 payments, 5 unattributed, $50,143.25 |
 
 ### Built but NOT YET WIRED, as at A2
 
