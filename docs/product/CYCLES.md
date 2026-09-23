@@ -16,7 +16,7 @@ that was expected FULL. Cycle 0's ran 2026-09-06: FULL, four of five.
 | 0 | **Foundation** — scaffold, migrations-from-commit-one, double-entry ledger core, role switch, deploy pipeline, the three copied modules | FULL *(confirmed)* | nothing | Nothing exists to protect yet — the one cycle with no allow-list (NEW mode). Everything later attaches to what it creates. |
 | 1 | **Settlement seam + USDC rail** | FULL | 0 | Proves the rail abstraction on the rail that already works; mode 3 (all-stablecoin) falls out. **The one to get right** — every later rail is an implementation behind this interface. |
 | 2 | **Fiat rail — Circle sandbox** | FULL | 1 | Async settlement, webhook signatures, idempotency, out-of-order delivery. First step: fund the sandbox balance and register a test bank account (recorded in STACK_RULES.md so it isn't a mid-cycle surprise). **Async-only — hybrid moved out 2026-09-15, see the programme note below.** |
-| 3 | **Reconciliation ops** | FULL | 2 | The five exceptions incl. failed screening, reversals, exception aging. **Mode 1 (all-fiat) completes here**; mode 2 (hybrid) now completes at cycle 6 with the programme. |
+| 3 | **Reconciliation ops** | FULL *(confirmed)* | 2 | The five exceptions, fixed at Discovery 2026-09-21: unmatched payment · ambiguous match · part payment · exception aging · the double-book refusal. **Reversals and failed screening moved out — see the note below.** **Mode 1 (all-fiat) completes here**; mode 2 (hybrid) now completes at cycle 6 with the programme. |
 | 4 | **Priced rail comparison v1** | likely LIGHT | 1–3 | **The headline, pulled forward** — one invoice, three rails, cost/speed/risk side by side. Needs only cycles 1–3, so the project's core claim exists by roughly week 7 even if everything after slips. Extends when the third rail lands (11). |
 | 4a | **Accounts mode** — real sign-in behind the `getIdentity()` seam, user↔party binding, onboarding; `AUTH_MODE` switch, second (login-gated) deployment | FULL | 0, 4 | *Added 2026-09-06 at Chetan's direction.* One codebase, two deployments — never two repos. Slotted after the headline so the job-search asset is never delayed by auth work. Adds ~3 weeks plus a both-modes test surcharge on every later cycle — accepted knowingly. |
 | 5 | **Funding models** — on-demand + committed facility, positions in the ledger | FULL | 1 | Undrawn carry displayed — instant funding costs the funder carry, and the product shows it rather than pretending it's free. |
@@ -108,6 +108,159 @@ density of the product is visible. Until then, new surfaces follow the
 cycle-0 vocabulary rather than inventing their own — drift is the thing to
 avoid while the redesign is pending, and `design-kit/DESIGN_SYSTEM_NOTES.md`
 holds the vocabulary.
+
+## Cycle 3's scope, fixed at its Discovery (2026-09-21)
+
+**Two changes to what row 3 promised, both Chetan's, both recorded rather than
+absorbed.**
+
+**Reversals move out to a cycle of their own, with credit loss.** Three reasons
+found while grilling cycle 3. They need contra-entry machinery inside
+`src/lib/ledger`, the sole writer. A booked deal would have to move backwards
+through `src/lib/domain/states.ts`, which is untouchable and whose line 3
+already reads *"The full machine (matured-unpaid, holds, reversals) is
+later-cycle design."* And they cannot be honestly evaluated in a sandbox where
+no deposit is ever clawed back — any eval would be a fiction written by the
+person it is meant to test. The hard case is not a matching problem at all: a
+reversal *after* payout drives `client_collections` negative, breaking the
+nets-to-zero property cycle 2 verified, and needs a platform receivable account
+that does not exist.
+
+**Failed sanctions screening moves to follow cycle 6.** Nothing in the roadmap
+builds screening before then; an exception cannot be handled before it can
+occur.
+
+**What cycle 3 gained instead:** a new `unapplied` account kind (the paper
+assumes it three times; `grep -i unapplied` across `src/` and `drizzle/`
+returns zero), a `listInbound()` rail capability, and a register of which
+external bank account belongs to which party.
+
+**The finding that justified the cycle.** Reconciling the live Circle sandbox
+against `settlement_events` on 2026-09-21: **13 deposits, 10 attributed, 3
+unattributed, $50,105.00**. `docs/product/circle-fiat/release.md` had recorded
+as fact that one deposit worth $100 was unreconciled, and that statement was
+the basis of a go/no-go decision. It was wrong by $50,005 — not through
+carelessness, but because nothing in the product could check.
+
+Full reasoning: `docs/product/reconciliation-ops/discovery.md`.
+
+## The three-account restructure — proposed at cycle 3, routed to cycle 10
+
+**Proposed 2026-09-21 (Chetan):** split the account model into a Disbursement
+account, a Repayment account, and a Cash account for platform income.
+
+**Not taken at cycle 3, and the reasons are worth keeping.** It does not solve
+cycle 3's problem — all three hold money that *is* attributed, and cycle 3 is
+about money that is not. It is not additive: every ledger entry ever written
+references the current `account_kind` values, so it is a migration of booked
+money rather than an addition beside it. And cycle 2 had just verified that
+`client_collections` nets to exactly zero at every stage, which *is* the
+segregation claim; splitting one account into two does not strengthen it.
+
+**It belongs at cycle 10** — *facility escrow + client-money segregation* —
+where account structure is the subject, the escrow justifies the migration, and
+the daily proof exists to test it. Recorded here as a decision waiting, not an
+idea lost.
+
+## Rail costs and who bears them — routed to cycle 6 (2026-09-22)
+
+**Decided at cycle 3's Design, after a Virtual Account Number test on the live
+Circle sandbox proved that inbound attribution follows the account number the
+payer sends to, not the reference they quote.**
+
+Giving each counterparty its own VAN would make inbound payments
+self-attributing. The decision taken is **VANs per supplier programme, not per
+debtor**: supplier and funder bank accounts must be registered for payouts
+anyway, so their VANs cost nothing extra, while a debtor is never paid and
+would be registered purely for reconciliation — and debtors are the many side,
+one supplier selling to many buyers.
+
+**Who bears each cost:** the platform for its own main account, for funders
+(scarce and courted) and for suppliers (free, registered already); the supplier
+for any per-debtor VAN, recovered in the rate rather than charged as a line
+item — the debtor is the supplier's customer and there is no commercial
+relationship with them to charge against.
+
+**Why cycle 6 owns the pricing half.** The programme note above already records
+that `src/lib/pricing/` never mentions `rail`, so the claim that the settlement
+rail is a *priced* decision is one the code does not make. Rail costs — VAN
+fees, wire fees, correspondent-bank deductions — are the concrete case that
+closes that gap, and they belong in the signed grid rather than in a per-deal
+field an operator types by hand.
+
+**One item lands in cycle 10 instead.** Using a supplier-linked account's VAN
+as a *collection* account means client money crediting the platform's balance
+tagged to an account record in the supplier's name. Adjacent to that cycle's
+client-money segregation work, and worth confirming with advice before it is
+built.
+
+Full reasoning: `docs/product/reconciliation-ops/design.md`, Epic F.
+
+## Cycle 10 — a fiat mechanism for segregation, found at cycle 3 (2026-09-23)
+
+**Cycle 10 has had a claim without an implementation.** Its scope says the
+escrow "generalized into demonstrable segregation of client money from platform
+funds, with the daily proof beside it", and the on-chain half is clear enough —
+balance on chain equals balance in the ledger. The **fiat** half had no
+mechanism at all. It does now, and the evidence is recorded here so the cycle
+does not start from scratch.
+
+**What Circle actually offers.** One Circle Mint account can hold several
+**wallets**, each with its own balance (`GET /v1/wallets`; balances queryable
+per wallet with `?walletId=`). Circle calls them institutional subaccounts and
+creates them through `POST /v1/externalEntities`. So a disbursement wallet and a
+collections wallet are a real thing, not a bookkeeping convention: money wired
+into a collections VAN credits the collections wallet and cannot silently fund a
+disbursement.
+
+**Proved in the sandbox on 2026-09-22/23, against the live account:**
+
+```text
+one linked bank account, two different STABLE virtual account numbers:
+  GET /…/wires/fbf1313c/instructions                      CIR2NV7EX2  11001233428
+  GET /…/wires/fbf1313c/instructions?walletId=1017494761  CIR32R8WXL  11001234876
+  (identical on repeat calls; an unknown walletId is refused)
+
+the entitlement gate is not closed in sandbox:
+  GET  /v1/externalEntities      200  {"data":[]}   (not 403)
+  POST /v1/externalEntities {}   400  field validation (not 401/403)
+
+attribution follows the ACCOUNT NUMBER, not the quoted reference:
+  sent account A's trackingRef with account B's VAN
+  → Circle rewrote the trackingRef to B's and attributed the deposit to B
+```
+
+**So the wallet is the multiplier, not the bank account.** One bank account × N
+wallets = N virtual account numbers. Per-supplier or per-programme collection
+numbers need no counterparty bank details at all — which also removes the
+objection that a debtor will not share theirs.
+
+**But it is not available, and that is the point of writing it down.** Circle
+Customer Care, 2026-09-23: *"The Circle Mint Account is available only to
+businesses… please reach out to our Sales team to discuss your production
+access."* Subaccounts require a negotiated commercial agreement, so this is a
+**documented production path, demonstrated in sandbox — not a capability this
+project can use.** Cycle 10 therefore proves segregation at the **ledger** level
+and cites this mechanism as what a commercial deployment would use.
+
+**Bankruptcy remoteness is unchanged, and must not be overclaimed.** Wallets are
+operational segregation, not a legal structure. Every wallet sits under the
+platform's own Circle account, and the balance is a claim on Circle that would
+be an asset of the platform's estate. `PRODUCT_PAPER.md` §10 Q18 already answers
+this — *"As demonstrated: no, deliberately"* — and prices the structures that do
+create remoteness (designated trust/safeguarded accounts at Stage 1; a
+securitisation vehicle or Series LLC at Stage 2, where the true-sale and
+non-consolidation opinions cost $50–250k). **Nothing found here moves that
+answer.** What wallets contribute is the *evidence* every one of those
+structures depends on: proof, at any moment, of whose money is whose.
+
+**One question left open, and it is the valuable one** if this ever goes
+commercial: can an institutional subaccount wallet be **designated as a
+client-money, trust or safeguarded account**, so the balance sits outside the
+platform's estate? That is a legal characterisation, not an API feature, and it
+is Stage 1's hinge.
+
+Full working: `docs/product/reconciliation-ops/design.md`, Epic F.
 
 ## Deferrals are per-cycle, not omissions
 

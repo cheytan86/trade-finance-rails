@@ -133,3 +133,92 @@ or Circle keeps delivering to a URL that has stopped answering.
 Invoke `/release` again when cycle 3 is finished. R0 re-runs against
 then-current evidence — this decision is a record of what was true on
 2026-09-21, not a standing verdict.
+
+---
+
+## Correction (2026-09-21, during cycle 3's Discovery)
+
+**Point 2 under X above is wrong, and is left in place rather than edited.**
+
+It states that one deposit — `99bea655` (100.00) — is unreconciled. Cycle 3's
+Discovery reconciled every deposit in the platform's Circle account against
+`settlement_events` for the first time:
+
+```text
+13 deposits · 10 attributed · 3 unattributed · $50,105.00
+
+    100.00  99bea655  2026-09-18T07:46:29   the one this record names
+      5.00  46069659  2026-09-15T10:12:07   not known until 2026-09-21
+  50000.00  5ec3e2b9  2026-09-15T09:43:02   not known until 2026-09-21
+```
+
+The statement was wrong by $50,005. It was made in good faith: the product
+could only ever see the exception it happened to trip over, and no control
+existed to ask the account what it held. That is precisely the gap this R0
+parked the release on, and the size of the gap is larger than the record knew.
+
+**It changes the decision not at all — it strengthens it.** The no-go stands
+on the absence of reconciliation controls, and the absence turns out to have
+been hiding more than it was thought to hide.
+
+The two 2026-09-15 deposits are almost certainly artefacts of cycle 2's API
+exploration rather than product activity. **Nothing in the product can say so**,
+which is the same finding stated a second way.
+
+Detail: `docs/product/reconciliation-ops/discovery.md`, row 5.
+
+### Baseline moved (2026-09-22)
+
+The figures above are as at 2026-09-21. A Virtual Account Number test run
+during cycle 3's Design added two deposits on purpose (13.57 and 24.68), and a
+second wire bank account that cannot be deleted — Circle exposes no delete
+endpoint for them.
+
+```text
+2026-09-21   13 deposits · 10 attributed · 3 unattributed · $50,105.00
+2026-09-22   15 deposits · 10 attributed · 5 unattributed · $50,143.25
+wire accts   fbf1313c (CIR2NV7EX2) · b5ac0172 (CIR3YJPTAG, created 06:18, pending)
+```
+
+The new account is `pending`, and `platformInboundTarget()` selects the first
+account with `status === "complete"` (`src/lib/rails/circle.ts:66-67`), so the
+preview's behaviour is unchanged. That selection is a latent defect either way
+— the inbound target is discovered, not configured — and cycle 3's contract
+names `circle.ts` for repair.
+
+**Teardown now has two items, not one:** the webhook subscription
+`56709d33-e17c-45bc-aa1d-5ce1b976fd08`, and the knowledge that wire account
+`b5ac0172` is permanent and will outlive it.
+
+### Production may not be available at all (2026-09-23)
+
+R0 parked production as a **decision**: flag off, build-skip on, revisited after
+cycle 3. A reply from Circle Customer Care suggests it may not be a decision.
+
+> "The Circle Mint Account is available only to businesses. This is not
+> available for individuals user. To proceed, please reach out to our Sales
+> team to discuss your production access, review your business requirements,
+> and receive a tailored commercial proposal."
+
+**Production Circle Mint requires a registered business entity and a negotiated
+commercial agreement.** Not a signup. So unless this project is carried by such
+an entity, **R2 cannot happen for the fiat rail**, and `circle-fiat` is
+permanently a sandbox demonstration.
+
+That is not a failure — a demonstration is what this project is for, and the
+preview already settled a real deal end to end. It is recorded here so the
+release record states a fact rather than leaving a decision pending that nobody
+can take.
+
+**What it changes:**
+
+```text
+R0 (2026-09-21)   no-go until cycle 3, by choice
+now               no-go until cycle 3 AND, beyond that, production access is
+                  gated on a commercial agreement outside this repo
+sandbox           unaffected. The preview remains the demonstration.
+```
+
+**What it does not change:** the go/no-go reasoning, the evidence, the three D7
+proofs, or the teardown obligations. Re-run `/release` after cycle 3 as planned;
+R0 will simply have one more fact to weigh.
