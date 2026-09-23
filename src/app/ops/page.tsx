@@ -31,14 +31,18 @@ export default async function OpsQueue() {
       const queues = await loadAllQueues();
       let count = 0;
       let minor = 0n;
-      let anySupported = false;
+      let anyOk = false;
       for (const q of queues) {
-        if (!q.supported) continue;
-        anySupported = true;
+        // A rail we could not reach makes the WHOLE total untrustworthy, so
+        // the card says so rather than quoting a figure that silently omits
+        // whatever that rail was holding.
+        if (q.status === "unreachable") railReachable = false;
+        if (q.status !== "ok") continue;
+        anyOk = true;
         count += q.totals.unattributedCount;
         minor += q.totals.unattributedMinor;
       }
-      if (anySupported) unattributed = { count, minor };
+      if (anyOk) unattributed = { count, minor };
     } catch {
       railReachable = false;
     }

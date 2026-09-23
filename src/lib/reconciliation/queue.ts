@@ -33,15 +33,28 @@ export interface QueuedPayment {
   bookedAgainst: Array<{ invoiceId: string; legType: string }>;
 }
 
+/**
+ * THREE ANSWERS, AND THE LAST TWO ARE NOT THE SAME.
+ *
+ *   ok           we asked and here is what the rail holds
+ *   unsupported  this rail has no outside — no money can arrive, ever
+ *   unreachable  we COULD NOT ASK
+ *
+ * Collapsing `unreachable` into either of the others is the exact failure this
+ * cycle exists to remove. An empty table would say "nothing arrived"; an
+ * "unsupported" card would say "nothing can arrive". Both are false when the
+ * truth is "Circle did not answer", and money may well be sitting there.
+ */
 export type QueueResult =
   | {
-      supported: true;
+      status: "ok";
       rail: RailId;
       payments: QueuedPayment[];
       /** Totals, computed over the whole list rather than the rendered page. */
       totals: { count: number; unattributedCount: number; unattributedMinor: bigint };
     }
-  | { supported: false; rail: RailId; reason: string };
+  | { status: "unsupported"; rail: RailId; reason: string }
+  | { status: "unreachable"; rail: RailId; reason: string };
 
 /**
  * Every movement already booked against a rail reference, with the deal it
@@ -88,9 +101,23 @@ async function bookedByReference(): Promise<
  */
 export async function loadQueue(railId: RailId): Promise<QueueResult> {
   const rail = railFor(railId);
-  const listing = await rail.listInbound();
+
+  let listing;
+  try {
+    listing = await rail.listInbound();
+  } catch (err) {
+    // A rail that cannot be reached is not a rail with nothing in it. The
+    // screen must say which, because money may be sitting there unseen.
+    return {
+      status: "unreachable",
+      rail: railId,
+      reason: `We could not reach this rail to ask what has arrived${
+        err instanceof Error ? ` — ${err.message}` : ""
+      }. Money may have arrived that is not shown here.`,
+    };
+  }
   if (!listing.supported) {
-    return { supported: false, rail: railId, reason: listing.reason };
+    return { status: "unsupported", rail: railId, reason: listing.reason };
   }
 
   const booked = await bookedByReference();
@@ -122,7 +149,7 @@ export async function loadQueue(railId: RailId): Promise<QueueResult> {
   const open = live.filter((p) => p.unattributedMinor > 0n);
 
   return {
-    supported: true,
+    status: "ok",
     rail: railId,
     payments,
     totals: {
@@ -139,7 +166,7 @@ export async function loadPayment(
   reference: string,
 ): Promise<QueuedPayment | null> {
   const result = await loadQueue(railId);
-  if (!result.supported) return null;
+  if (result.status !== "ok") return null;
   return result.payments.find((p) => p.payment.reference === reference) ?? null;
 }
 
@@ -158,7 +185,24 @@ export async function loadPayment(
  * architecture.
  */
 export async function loadAllQueues(): Promise<QueueResult[]> {
-  return Promise.all(ALL_RAILS.map((rail) => loadQueue(rail.id)));
+  // Promise.all would have let ONE unreachable rail take down the whole
+  // screen — including the two rails that need no network to answer. Each
+  // rail reports for itself.
+  return Promise.all(
+    ALL_RAILS.map(async (rail) => {
+      try {
+        return await loadQueue(rail.id);
+      } catch (err) {
+        return {
+          status: "unreachable" as const,
+          rail: rail.id,
+          reason: `We could not reach this rail${
+            err instanceof Error ? ` — ${err.message}` : ""
+          }. Money may have arrived that is not shown here.`,
+        };
+      }
+    }),
+  );
 }
 
 /**
@@ -173,7 +217,7 @@ export async function findPayment(
   reference: string,
 ): Promise<{ rail: RailId; queued: QueuedPayment } | null> {
   for (const result of await loadAllQueues()) {
-    if (!result.supported) continue;
+    if (result.status !== "ok") continue;
     const hit = result.payments.find((p) => p.payment.reference === reference);
     if (hit) return { rail: result.rail, queued: hit };
   }

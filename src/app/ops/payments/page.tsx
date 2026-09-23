@@ -40,10 +40,10 @@ export default async function PaymentsQueue() {
   // its reason — so a person whose deal settled on demo-internal is told why
   // it is absent instead of concluding the screen is broken.
   const results = await loadAllQueues();
-  const supported = results.filter((r) => r.supported);
-  const totals = supported.reduce(
+  const unreachable = results.filter((r) => r.status === "unreachable");
+  const totals = results.reduce(
     (t, r) => {
-      if (!r.supported) return t;
+      if (r.status !== "ok") return t;
       return {
         count: t.count + r.totals.count,
         unattributedCount: t.unattributedCount + r.totals.unattributedCount,
@@ -87,8 +87,22 @@ export default async function PaymentsQueue() {
         </Card>
       </div>
 
+      {unreachable.length > 0 ? (
+        // Stated ABOVE the figures, because it makes them incomplete.
+        <Card title="These totals are incomplete">
+          <p className="text-[13px] text-refuse">
+            {unreachable.length === 1 ? "A rail" : `${unreachable.length} rails`} could not be
+            reached, so money may have arrived that is not counted here.
+          </p>
+        </Card>
+      ) : null}
+
       {results.map((result) =>
-        !result.supported ? (
+        result.status === "unreachable" ? (
+          <Card key={result.rail} title={railFor(result.rail).label}>
+            <p className="text-[13px] text-refuse">{result.reason}</p>
+          </Card>
+        ) : result.status === "unsupported" ? (
           // NOT an empty table. "This rail has no outside" and "nothing
           // arrived" are different statements, and only one of them is true.
           <Card key={result.rail} title={railFor(result.rail).label}>
@@ -145,7 +159,10 @@ export default async function PaymentsQueue() {
                           </Td>
                           <Td className="text-[12.5px] text-muted">
                             {payment.sender?.name ?? (
-                              <span className="text-track-idle">not stated</span>
+                              // `text-muted` — NOT the dashboard's track-idle,
+                              // which this app does not define and which
+                              // therefore rendered as no colour at all.
+                              <span className="text-muted">not stated by the rail</span>
                             )}
                           </Td>
                           <Td right>
