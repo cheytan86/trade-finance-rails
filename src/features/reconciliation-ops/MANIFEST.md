@@ -166,6 +166,8 @@ npm run build        succeeds — 10 routes, all dynamic
 | A2 | states and transitions — the derived state model, FIX A, FIX B, A3 | **new:** `attribution.ts`, `attribution.test.ts` · **modified:** `verify-circle.ts` (7), `pending.ts` (8), `verify-circle.test.ts` (10), `pending.test.ts` (11) | ✅ 2026-09-23 · 237 tests · build ✓ |
 | smoke | the spine walked on the fiat rail after A2 touched two money-path files | deal `9cc15acd`, face 200.00 → `settled`, five legs, **all five booked unattended** (`applied=5`), `client_collections` 0.00, net 0.00 | ✅ 2026-09-23 · Chetan |
 | schema | `unapplied` account kind · `attribution_reason` enum · `inbound_payments` table · `unapplied` added to CLIENT_MONEY_KINDS | **new:** `drizzle/0007_reconciliation.sql` · **modified:** `src/db/schema.ts` (1), `drizzle/meta/_journal.json`, **`src/lib/ledger/index.ts` (untouchable — one line, on Chetan's explicit approval)** | ✅ 2026-09-23 · applied to the live database and read back |
+| B1 | every rail asked, not one — the hard-code removed | **modified:** `queue.ts`, `/ops/payments/page.tsx`, `/ops/payments/[paymentId]/page.tsx`, `actions.ts` (all mine), `/ops/page.tsx` (9) | ✅ 2026-09-23 · 237 tests · build ✓ |
+| A gate | tsc 0 · lint 0 · 237 tests · build ✓ 12 routes · every surface 200 · zero data-client imports in the feature folder · no model calls | — | ✅ 2026-09-23 |
 | A5 | the human gate and the write — the attribution action | **new:** `src/lib/reconciliation/actions.ts`, `src/lib/reconciliation/booked.ts`, `src/components/payment-attribute-form.tsx` · **modified:** `candidates.ts`, `/ops/payments/[paymentId]/page.tsx` (both mine) | ✅ 2026-09-23 · 237 tests · build ✓ |
 | A4 | the permission gate + the flag-gated ops index link | **modified:** `src/app/ops/page.tsx` (9) | ✅ 2026-09-23 · flag-off and wrong-seat both proved by curl |
 | A3b | the attribution screen — candidates, refusals, no ranking | **new:** `src/lib/reconciliation/candidates.ts`, `src/app/ops/payments/[paymentId]/page.tsx` · **modified:** `attribution.ts`, `fixtures/legs.ts`, `fixtures/payments.ts`, `queue.ts` (all feature-folder / new) | ✅ 2026-09-23 · 237 tests · build ✓ 12 routes |
@@ -184,6 +186,33 @@ unapplied cash is emphatically client money: somebody paid it and it is not the
 platform's. The first part payment to book would have rendered as platform
 funds. **`bookMovement` was not touched** — this cycle still adds no new way to
 book.
+
+### The hard-code Chetan found, and what it cost (2026-09-23)
+
+A3 built the queue against `const RAIL = "circle-fiat"`. Invisible while one
+rail had an outside — and it made the `unsupported` branch **unreachable**.
+That branch was written carefully, argued for in a commit message, and was
+dead code: a person funding a demo-internal deal saw a queue full of other
+people's payments with no explanation of why theirs was absent. **Chetan hit
+exactly that** with INV-2323-034 and asked whether it was broken.
+
+**This project's recurring defect shape, for the fifth time**: described but
+not performed. `fee_income`, `statement-line`, `webhook_outcome.ignored`, the
+`unapplied` account — and now an honest error message nobody could reach.
+
+Fixed by asking EVERY rail (`loadAllQueues`) and rendering the unsupported ones
+with their reason. The rail is also now DISCOVERED from a payment reference
+(`findPayment`) rather than assumed, on the detail page and in the action — the
+browser posts decisions, not lookups, and letting a URL name the rail would let
+it choose which one the server consults.
+
+### Known shape this will have to grow
+
+`listInbound()` returns ONE list per rail. If the platform ever holds two
+Circle wallets — a disbursement wallet and a collections wallet, which needs
+institutional subaccounts and therefore a commercial agreement — that is one
+rail with two balances, and the listing would need to say which wallet each
+payment landed in. Recorded so it is not rediscovered.
 
 ### Case C is deferred, by name (2026-09-23)
 

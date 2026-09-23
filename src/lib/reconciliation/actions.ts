@@ -31,11 +31,9 @@ import {
   parseStoredEntries,
 } from "@/lib/settlement/pending";
 import { refuseAttribution, type BookedMovement } from "@/features/reconciliation-ops/attribution";
-import { loadPayment } from "./queue";
+import { findPayment } from "./queue";
 import { loadBookedOnLeg } from "./booked";
 import type { RailId } from "@/lib/rails";
-
-const RAIL: RailId = "circle-fiat";
 
 export interface AttributionResult {
   ok: boolean;
@@ -108,14 +106,16 @@ export async function attributePayment(input: {
 
   // THE RAIL IS RE-READ, every time. The form's copy of the payment could be
   // minutes old, and a payment's status can move.
-  const queued = await loadPayment(RAIL, input.reference);
-  if (!queued) {
+  // The rail is discovered from the reference, not posted by the browser.
+  const found = await findPayment(input.reference);
+  if (!found) {
     return {
       ok: false,
       rule: "payment-not-found",
       message: "The rail no longer lists that payment. Reload the queue.",
     };
   }
+  const { rail: RAIL, queued } = found;
 
   const [leg] = await db
     .select()
@@ -194,7 +194,7 @@ export async function attributePayment(input: {
   // no new way to move an invoice.
   await advanceFromBookedLegs(db, leg.invoiceId);
 
-  await recordDecision(input.reference, input.reason, input.note, identity?.seat ?? null);
+  await recordDecision(RAIL, input.reference, input.reason, input.note, identity?.seat ?? null);
 
   for (const path of [
     "/ops",
@@ -223,6 +223,7 @@ export async function attributePayment(input: {
  * than no note only if it takes the booking with it.
  */
 async function recordDecision(
+  rail: RailId,
   reference: string,
   reason: string | undefined,
   note: string | undefined,
@@ -235,7 +236,7 @@ async function recordDecision(
     await db
       .insert(inboundPayments)
       .values({
-        rail: RAIL,
+        rail: rail as RailId,
         externalId: reference,
         owner: seat,
         note: note?.slice(0, 2_000) || null,

@@ -20,7 +20,7 @@
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { ledgerEntries, settlementEvents } from "@/db/schema";
-import { railFor, type InboundPayment, type RailId } from "@/lib/rails";
+import { ALL_RAILS, railFor, type InboundPayment, type RailId } from "@/lib/rails";
 
 export interface QueuedPayment {
   payment: InboundPayment;
@@ -141,4 +141,41 @@ export async function loadPayment(
   const result = await loadQueue(railId);
   if (!result.supported) return null;
   return result.payments.find((p) => p.payment.reference === reference) ?? null;
+}
+
+/**
+ * EVERY RAIL, ASKED IN TURN — cycle 3's answer to "where does money arrive?".
+ *
+ * The page used to hard-code `circle-fiat`. That was invisible while only one
+ * rail had an outside, and it would have become a defect the moment a second
+ * one did: money arrives, the rail knows, and nothing asks. Worse, it made the
+ * `unsupported` branch unreachable — so a person funding a demo-internal deal
+ * saw a queue full of OTHER people's payments and no explanation of why theirs
+ * was absent. That is how this loop came to be written.
+ *
+ * Rails that cannot receive money still appear, each carrying its reason. The
+ * screen is then honest about its own scope without anybody having to know the
+ * architecture.
+ */
+export async function loadAllQueues(): Promise<QueueResult[]> {
+  return Promise.all(ALL_RAILS.map((rail) => loadQueue(rail.id)));
+}
+
+/**
+ * Which rail holds this payment reference, if any.
+ *
+ * References are rail-specific, so the rail is DISCOVERED rather than assumed.
+ * The alternative — passing a rail id through the URL — would let the browser
+ * choose which rail the server consults, and the browser posts decisions, not
+ * lookups.
+ */
+export async function findPayment(
+  reference: string,
+): Promise<{ rail: RailId; queued: QueuedPayment } | null> {
+  for (const result of await loadAllQueues()) {
+    if (!result.supported) continue;
+    const hit = result.payments.find((p) => p.payment.reference === reference);
+    if (hit) return { rail: result.rail, queued: hit };
+  }
+  return null;
 }

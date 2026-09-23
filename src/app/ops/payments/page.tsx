@@ -22,15 +22,10 @@ import { Amount } from "@/components/ui/amount";
 import { ProvenanceBadge } from "@/components/ui/provenance-badge";
 import { ArrivedAge, PaymentStatePill, type PaymentTone } from "@/components/payment-state-pill";
 import { seatGate } from "@/lib/roles/gate";
-import { loadQueue } from "@/lib/reconciliation/queue";
+import { loadAllQueues } from "@/lib/reconciliation/queue";
 import { railFor } from "@/lib/rails";
 
 export const dynamic = "force-dynamic";
-
-/** The rail this queue reads. Fiat is the only one with an outside today;
- *  the others answer `unsupported` and the page says so rather than showing
- *  an empty table. */
-const RAIL = "circle-fiat" as const;
 
 export default async function PaymentsQueue() {
   // A public flag is never a permission, and it is not a route either: with
@@ -41,19 +36,22 @@ export default async function PaymentsQueue() {
   const gate = await seatGate("ops", "/ops/payments");
   if (gate) return gate;
 
-  const result = await loadQueue(RAIL);
-
-  if (!result.supported) {
-    // NOT an empty table. "We could not ask" and "nothing arrived" are
-    // different statements and only one of them is true.
-    return (
-      <Card title="Money received" sub={railFor(RAIL).label}>
-        <p className="text-[13px] text-muted">{result.reason}</p>
-      </Card>
-    );
-  }
-
-  const { payments, totals } = result;
+  // EVERY RAIL, not one. Rails with no outside still appear, each carrying
+  // its reason — so a person whose deal settled on demo-internal is told why
+  // it is absent instead of concluding the screen is broken.
+  const results = await loadAllQueues();
+  const supported = results.filter((r) => r.supported);
+  const totals = supported.reduce(
+    (t, r) => {
+      if (!r.supported) return t;
+      return {
+        count: t.count + r.totals.count,
+        unattributedCount: t.unattributedCount + r.totals.unattributedCount,
+        unattributedMinor: t.unattributedMinor + r.totals.unattributedMinor,
+      };
+    },
+    { count: 0, unattributedCount: 0, unattributedMinor: 0n },
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -64,7 +62,7 @@ export default async function PaymentsQueue() {
             payments received
           </div>
           <div className="text-[12px] text-muted">
-            everything the rail holds, expected or not
+            everything the rails hold, expected or not
           </div>
         </Card>
         <Card>
@@ -89,83 +87,93 @@ export default async function PaymentsQueue() {
         </Card>
       </div>
 
-      <Card
-        title="Money received"
-        sub={`${railFor(RAIL).label} — read from the rail itself, not from the notification log. Attribution is derived by summing what has booked against each payment.`}
-      >
-        {payments.length === 0 ? (
-          <p className="text-[13px] text-muted">
-            The rail holds no payments for this account yet.
-          </p>
+      {results.map((result) =>
+        !result.supported ? (
+          // NOT an empty table. "This rail has no outside" and "nothing
+          // arrived" are different statements, and only one of them is true.
+          <Card key={result.rail} title={railFor(result.rail).label}>
+            <p className="text-[13px] text-muted">{result.reason}</p>
+          </Card>
         ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>Payment</Th>
-                <Th>Sender</Th>
-                <Th right>Amount</Th>
-                <Th right>Unattributed</Th>
-                <Th>Arrived</Th>
-                <Th>State</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map(({ payment, unattributedMinor, state, bookedAgainst }) => {
-                const tone: PaymentTone =
-                  payment.status === "complete" ? state : payment.status;
-                return (
-                  <tr key={payment.reference}>
-                    <Td>
-                      <Link
-                        className="font-medium hover:text-cobalt"
-                        href={`/ops/payments/${payment.reference}`}
-                      >
-                        {/* The cycle-2 third treatment: solid because a
-                            Circle payment id IS real evidence, unlinked
-                            because it lives in someone else's database and
-                            there is nowhere to send a reader. */}
-                        <ProvenanceBadge trusted>
-                          {payment.reference.slice(0, 8)}
-                        </ProvenanceBadge>
-                      </Link>
-                      {bookedAgainst.length > 0 ? (
-                        <div className="mt-1 text-[12px] text-muted">
-                          settled {bookedAgainst.map((b) => b.legType).join(", ")} on{" "}
-                          {bookedAgainst.map((b) => b.invoiceId.slice(0, 8)).join(", ")}
-                        </div>
-                      ) : null}
-                    </Td>
-                    <Td className="text-[12.5px] text-muted">
-                      {payment.sender?.name ?? (
-                        // A payment with no sender is still fully attributable:
-                        // the sender is context for a person, never a
-                        // precondition.
-                        <span className="text-track-idle">not stated</span>
-                      )}
-                    </Td>
-                    <Td right>
-                      <Amount minor={payment.amountMinor} />
-                    </Td>
-                    <Td right>
-                      {unattributedMinor > 0n ? (
-                        <Amount minor={unattributedMinor} />
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </Td>
-                    <Td>
-                      <ArrivedAge at={payment.arrivedAt} />
-                    </Td>
-                    <Td>
-                      <PaymentStatePill tone={tone} />
-                    </Td>
+          <Card
+            key={result.rail}
+            title={railFor(result.rail).label}
+            sub="Read from the rail itself, not from the notification log. Attribution is derived by summing what has booked against each payment."
+          >
+            {result.payments.length === 0 ? (
+              <p className="text-[13px] text-muted">
+                The rail holds no payments for this account yet.
+              </p>
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Payment</Th>
+                    <Th>Sender</Th>
+                    <Th right>Amount</Th>
+                    <Th right>Unattributed</Th>
+                    <Th>Arrived</Th>
+                    <Th>State</Th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </Table>
-        )}
-      </Card>
+                </thead>
+                <tbody>
+                  {result.payments.map(
+                    ({ payment, unattributedMinor, state, bookedAgainst }) => {
+                      const tone: PaymentTone =
+                        payment.status === "complete" ? state : payment.status;
+                      return (
+                        <tr key={payment.reference}>
+                          <Td>
+                            <Link
+                              className="font-medium hover:text-cobalt"
+                              href={`/ops/payments/${payment.reference}`}
+                            >
+                              {/* The cycle-2 third treatment: solid because a
+                                  Circle payment id IS real evidence, unlinked
+                                  because it lives in someone else's database
+                                  and there is nowhere to send a reader. */}
+                              <ProvenanceBadge trusted>
+                                {payment.reference.slice(0, 8)}
+                              </ProvenanceBadge>
+                            </Link>
+                            {bookedAgainst.length > 0 ? (
+                              <div className="mt-1 text-[12px] text-muted">
+                                settled {bookedAgainst.map((b) => b.legType).join(", ")} on{" "}
+                                {bookedAgainst.map((b) => b.invoiceId.slice(0, 8)).join(", ")}
+                              </div>
+                            ) : null}
+                          </Td>
+                          <Td className="text-[12.5px] text-muted">
+                            {payment.sender?.name ?? (
+                              <span className="text-track-idle">not stated</span>
+                            )}
+                          </Td>
+                          <Td right>
+                            <Amount minor={payment.amountMinor} />
+                          </Td>
+                          <Td right>
+                            {unattributedMinor > 0n ? (
+                              <Amount minor={unattributedMinor} />
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </Td>
+                          <Td>
+                            <ArrivedAge at={payment.arrivedAt} />
+                          </Td>
+                          <Td>
+                            <PaymentStatePill tone={tone} />
+                          </Td>
+                        </tr>
+                      );
+                    },
+                  )}
+                </tbody>
+              </Table>
+            )}
+          </Card>
+        ),
+      )}
     </div>
   );
 }

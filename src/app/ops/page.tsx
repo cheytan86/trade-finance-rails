@@ -5,7 +5,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Amount } from "@/components/ui/amount";
 import { allInvoices, openLegs } from "@/lib/queries";
 import { seatGate } from "@/lib/roles/gate";
-import { loadQueue } from "@/lib/reconciliation/queue";
+import { loadAllQueues } from "@/lib/reconciliation/queue";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +26,19 @@ export default async function OpsQueue() {
   let railReachable = true;
   if (process.env.NEXT_PUBLIC_ENABLE_RECONCILIATION) {
     try {
-      const queue = await loadQueue("circle-fiat");
-      if (queue.supported) {
-        unattributed = {
-          count: queue.totals.unattributedCount,
-          minor: queue.totals.unattributedMinor,
-        };
+      // Every rail that can receive money, summed. Rails with no outside
+      // contribute nothing rather than being excluded by name.
+      const queues = await loadAllQueues();
+      let count = 0;
+      let minor = 0n;
+      let anySupported = false;
+      for (const q of queues) {
+        if (!q.supported) continue;
+        anySupported = true;
+        count += q.totals.unattributedCount;
+        minor += q.totals.unattributedMinor;
       }
+      if (anySupported) unattributed = { count, minor };
     } catch {
       railReachable = false;
     }
@@ -80,13 +86,18 @@ export default async function OpsQueue() {
               <Link className="font-medium hover:text-cobalt" href="/ops/payments">
                 Money received →
               </Link>
+              <div className="mt-0.5 text-[12px] text-muted">
+                Only rails with an outside can receive money. Deals on
+                demo-internal and USDC settle without an inbound payment, so
+                they never appear there — the ledger still has every movement.
+              </div>
               <div className="mt-0.5 text-[12.5px] text-muted">
                 {!railReachable
                   ? // NOT "nothing arrived". We could not ask, and saying so is
                     // the whole point of this cycle.
                     "The rail could not be reached, so we cannot say what has arrived."
                   : unattributed === null
-                    ? "This rail has no inbound payments."
+                    ? "No rail on this deployment receives inbound payments."
                     : unattributed.count === 0
                       ? "Every payment the rail holds is attributed."
                       : "Money the ledger cannot yet account for."}

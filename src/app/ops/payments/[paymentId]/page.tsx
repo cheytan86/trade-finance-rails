@@ -24,14 +24,12 @@ import { Amount } from "@/components/ui/amount";
 import { ProvenanceBadge } from "@/components/ui/provenance-badge";
 import { ArrivedAge, PaymentStatePill, type PaymentTone } from "@/components/payment-state-pill";
 import { seatGate } from "@/lib/roles/gate";
-import { loadPayment } from "@/lib/reconciliation/queue";
+import { findPayment } from "@/lib/reconciliation/queue";
 import { loadCandidates } from "@/lib/reconciliation/candidates";
 import { railFor } from "@/lib/rails";
 import { PaymentAttributeForm } from "@/components/payment-attribute-form";
 
 export const dynamic = "force-dynamic";
-
-const RAIL = "circle-fiat" as const;
 
 export default async function PaymentDetail({
   params,
@@ -42,8 +40,12 @@ export default async function PaymentDetail({
   const gate = await seatGate("ops", `/ops/payments/${paymentId}`);
   if (gate) return gate;
 
-  const queued = await loadPayment(RAIL, paymentId);
-  if (!queued) notFound();
+  // The rail is DISCOVERED from the reference, never taken from the URL: the
+  // browser posts decisions, not lookups, and letting it name the rail would
+  // let it choose which one the server consults.
+  const found = await findPayment(paymentId);
+  if (!found) notFound();
+  const { rail: RAIL, queued } = found;
 
   const { payment, attributedMinor, unattributedMinor, state, bookedAgainst } = queued;
   const tone: PaymentTone = payment.status === "complete" ? state : payment.status;
