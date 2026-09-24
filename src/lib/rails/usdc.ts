@@ -56,6 +56,15 @@ export const usdcRail: SettlementRail = {
   // seconds, so most legs settle in the same request — but never by waiting.
   settlement: "immediate",
 
+  // Cycle 4. Both are real and both have been met: cycle 1 hit an RPC
+  // read-after-write lag that refused a legitimate disbursement, and
+  // verify-usdc.ts books nothing it cannot re-derive from the chain.
+  failureModes:
+    "A transfer that cannot be re-derived from the chain books nothing, and a node that has not caught up looks the same as one that has nothing to report.",
+  // A transaction hash. Anyone can open it on Basescan, today or in ten
+  // years, without asking us or Circle for anything.
+  verifiability: "public",
+
   async prepare(req: TransferRequest): Promise<TransferPreview> {
     const from = demoWalletAddress(req.from as WalletActor);
     const to = demoWalletAddress(req.to as WalletActor);

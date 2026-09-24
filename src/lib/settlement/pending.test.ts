@@ -34,11 +34,22 @@ let supplierId: string;
 let clientMoneyId: string;
 let platformOwnId: string;
 
+/** Cycle 4 added two DECLARED fields to the rail interface — what can go wrong
+ *  on this rail, and who can independently check a settlement on it. A stub
+ *  rail must answer both, which is the point: a rail that cannot join the
+ *  comparison silently cannot join a test silently either. These are the
+ *  stub's own answers and are never read by the assertions below. */
+const STUB_DECLARATIONS = {
+  failureModes: "a stub rail in a test — it does what the test tells it to",
+  verifiability: "us-only",
+} as const;
+
 /** A rail that settles instantly — cycle 0's behaviour. */
 const instantRail = (ref = "demo:ok"): SettlementRail => ({
   id: "demo-internal",
   label: "instant (test)",
   settlement: "immediate",
+  ...STUB_DECLARATIONS,
   prepare: async () => ({
     rail: "demo-internal",
     amountMinor: 0n,

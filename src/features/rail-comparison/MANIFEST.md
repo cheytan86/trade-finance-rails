@@ -76,9 +76,28 @@ discovered as an unexplained line in a diff.*
  6. src/lib/rails/circle.ts             its declarations
  7. src/app/ops/deals/[id]/page.tsx     render the comparison inside stage 2,
                                         flag-gated
+ 8. scripts/eval-circle-fiat.mts        cycle 2's eval harness holds a stub
+                                        rail; adding failureModes +
+                                        verifiability to the interface makes
+                                        EVERY implementor need them. Two lines,
+                                        no behaviour change — the harness
+                                        compares nothing and renders nothing.
 ```
 
-**Seven files. Anything else is a stop-and-ask, including a shared component, a
+*Item 8 added 2026-09-24 as a stop-and-ask raised mid-A3, on Chetan's approval.*
+**This was a gap in the design's contract, and it is the SECOND time the same
+gap has appeared.** Cycle 3 added the identical file for the identical reason —
+its allow-list item 13, when `listInbound()` joined the interface. The standing
+lesson, worth carrying to the design kit rather than rediscovering at cycle 11:
+**an interface change's allow-list must name every implementor, including the
+fake ones.** A design that predicts the principle and not the consequence is
+half a contract.
+
+*Making the fields optional was considered and rejected, on cycle 3's own
+words: "optional is how a rail ends up silently answering 'nothing arrived'
+instead of 'I have no outside'." A red `tsc` here is the feature working.*
+
+**Eight files. Anything else is a stop-and-ask, including a shared component, a
 config, or a dependency. "It would be cleaner" is never sufficient.**
 
 ### Deliberately NOT on the allow-list
@@ -170,3 +189,4 @@ npm run build        succeeds — 12 routes, all dynamic
 | Gate 0.5 | contract verified line by line, rails set | `.env.example`, this manifest, `AGENTS.md` | ✅ 2026-09-24 |
 | A1 | **FIX 1** — one duration, one clock. `resolvedAt` takes `sql\`now()\`` in `markSettled` and `markFailed`, plus two regression tests | **modified:** `pending.ts` (1), `pending.test.ts` (2) | ✅ 2026-09-24 · 239 tests · **proved by reverting**: −27 ms and −55 ms with the fix out |
 | A2 | the history query — `summarise` (pure) + `loadRailHistory`, the median/slowest/did-not-settle-cleanly figures, and the impossible-duration exclusion | **new:** `src/lib/rails/history.ts`, `history.test.ts`, `src/features/rail-comparison/fixtures.ts` | ✅ 2026-09-24 · 252 tests · verified against the live database |
+| A3 | the rail declarations — `failureModes` + `verifiability` on the interface, answered by all three rails, plus a test that they say something | **modified:** `types.ts` (3), `demo-internal.ts` (4), `usdc.ts` (5), `circle.ts` (6), `pending.test.ts` (2), `eval-circle-fiat.mts` (8 — **stop-and-ask, approved**) · `history.test.ts` (mine) | ✅ 2026-09-24 · 259 tests · build ✓ |

@@ -89,6 +89,19 @@ export const circleFiatRail: SettlementRail = {
   // truth later, by webhook.
   settlement: "deferred",
 
+  // Cycle 4. Every clause is something this project has actually met. Cycle 2
+  // found the SNS signature defect, which refused every genuine notification
+  // until Deploy caught it, and its own deploy record notes that "a refused
+  // delivery is never retried into success" — SNS gives up. The window is
+  // cycle 3's FIX B: two deposits of the same amount park the leg rather than
+  // failing it, and a person matches by hand.
+  failureModes:
+    "A leg is instructed now and confirmed later, so a notification that never arrives leaves money in flight until someone asks the rail directly; two deposits of the same amount park the leg for a person to match.",
+  // A Circle payment id is real evidence — and a reader cannot open it.
+  // DESIGN_SYSTEM_NOTES gave this its own provenance treatment at cycle 2's
+  // close, solid but unlinked, naming it the axis cycle 4 compares on.
+  verifiability: "custodian",
+
   async prepare(req: TransferRequest): Promise<TransferPreview> {
     // REFUSE HERE, BEFORE THE DIALOG OPENS — never at execute. An operator
     // must not confirm a movement that was never going to be possible.

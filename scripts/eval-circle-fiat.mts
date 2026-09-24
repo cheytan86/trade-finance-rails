@@ -127,6 +127,17 @@ function scriptedRail(outcomes: VerifyOutcome[], reference = "circle:scripted"):
     id: "circle-fiat",
     label: "Circle sandbox (scripted, eval harness)",
     settlement: "deferred",
+    // cycle 4: the interface gained failureModes + verifiability, so a rail
+    // cannot join the comparison without declaring what can go wrong on it and
+    // who can check a settlement. This harness compares nothing and renders
+    // nothing — it drives deals through scripted verify() outcomes — so these
+    // are the stub's own honest answers and no assertion reads them.
+    //
+    // THAT THIS FILE NEEDED EDITING IS THE FEATURE WORKING. Making the fields
+    // optional would have left it compiling and left cycle 11's Visa adapter
+    // free to join the table with a blank cell.
+    failureModes: "a scripted stub in an eval harness — it fails exactly when the scenario says to",
+    verifiability: "us-only",
     // cycle 3: the interface gained listInbound(). This harness drives deals
     // through scripted verify() outcomes and never asks a rail what has
     // arrived, so it declares unsupported rather than pretending to a queue.

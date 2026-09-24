@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import { summarise, type HistoryRow } from "./history";
+import { ALL_RAILS } from "@/lib/rails";
 import {
   manySettlements,
   noHistory,
@@ -148,6 +149,43 @@ describe("summarise — did not settle cleanly", () => {
     // to settle" would answer a different question than the column asks.
     const h = of(didNotSettleCleanly, "circle-fiat");
     expect(h.duration).toEqual({ known: true, count: 1, medianMs: 40_000, slowestMs: 40_000 });
+  });
+});
+
+describe("every rail declares what can go wrong, and who can check it", () => {
+  // THE MEASURED HALF IS ONLY HALF. `demo-internal` shows zero failures
+  // because nothing ever leaves the building — a zero meaning "we never
+  // tried" is indistinguishable from one meaning "it always works", and only
+  // the declared sentence tells them apart. So the comparison is unsound
+  // unless every rail has one.
+  //
+  // `tsc` already enforces PRESENCE, because the fields are required on the
+  // interface. It cannot enforce that they say anything. This does.
+
+  it.each(ALL_RAILS.map((r) => [r.id, r] as const))(
+    "%s declares a failure mode that is a sentence, not a placeholder",
+    (_id, rail) => {
+      expect(rail.failureModes.length).toBeGreaterThan(30);
+      expect(rail.failureModes.trim()).toBe(rail.failureModes);
+      // A declared danger must be true before the rail has ever been used —
+      // which is exactly when an operator needs it and no count exists.
+      expect(rail.failureModes).not.toMatch(/TODO|TBD|\bnone\b/i);
+    },
+  );
+
+  it.each(ALL_RAILS.map((r) => [r.id, r] as const))(
+    "%s declares who can verify a settlement on it",
+    (_id, rail) => {
+      expect(["us-only", "public", "custodian"]).toContain(rail.verifiability);
+    },
+  );
+
+  it("the three rails do not all give the same answer", () => {
+    // If they did, the column would be decoration. The distinction is real:
+    // an accounting assertion, a public chain, and a custodian's record are
+    // three different things to trust.
+    const answers = new Set(ALL_RAILS.map((r) => r.verifiability));
+    expect(answers.size).toBe(3);
   });
 });
 

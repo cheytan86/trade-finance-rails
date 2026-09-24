@@ -28,6 +28,15 @@ export const demoInternalRail: SettlementRail = {
   // Books inside the request that asked for it — cycle 0's behaviour.
   settlement: "immediate",
 
+  // Cycle 4. This rail's zero failures are not a safety record — there is
+  // nothing here that COULD fail, and the sentence is what stops the count
+  // being read as "the safest rail".
+  failureModes: "Nothing leaves the building, so nothing can fail in transit — and nothing can be proved either.",
+  // `verify` above can only check that the reference is the one this request
+  // would have produced. Its own comment: "tamper-evidence within the demo,
+  // never independent truth."
+  verifiability: "us-only",
+
   async prepare(req: TransferRequest): Promise<TransferPreview> {
     return {
       rail: "demo-internal",

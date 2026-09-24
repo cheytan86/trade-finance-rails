@@ -151,11 +151,55 @@ export type InboundListing =
   | { supported: true; payments: InboundPayment[] }
   | { supported: false; reason: string };
 
+/**
+ * WHO, IF ANYONE, CAN CHECK A SETTLEMENT ON THIS RAIL — cycle 4.
+ *
+ * This is the axis `DESIGN_SYSTEM_NOTES.md` reserved for this cycle at cycle
+ * 2's close, when it gave a Circle payment id its own provenance treatment:
+ * *"solid because it is real, unlinked because there is nothing to open…
+ * that distinction is the axis cycle 4 compares rails on."*
+ *
+ *   "us-only"    our word, and nothing else. demo-internal asserts an
+ *                accounting fact about itself; nothing left the building.
+ *   "public"     anyone can verify it, independently, forever. A Base
+ *                Sepolia transaction hash.
+ *   "custodian"  real evidence, held by someone who is not us and cannot be
+ *                read by the person looking at the screen. A Circle payment
+ *                id.
+ *
+ * WHY IT IS ON THIS INTERFACE and not a map in a feature folder: a rail must
+ * not be able to join the comparison without answering. Cycle 3 settled the
+ * same argument about `listInbound` — *"optional is how a rail ends up
+ * silently answering 'nothing arrived' instead of 'I have no outside'"* — and
+ * cycle 11's Visa adapter is the next rail this will catch.
+ *
+ * IT IS NOT A RANKING. "public" is not better than "us-only"; they describe
+ * different things a reader may need. The screen renders them in registry
+ * order and marks none preferred.
+ */
+export type Verifiability = "us-only" | "public" | "custodian";
+
 export interface SettlementRail {
   readonly id: RailId;
   /** Shown wherever the rail is named; the demo must never look production. */
   readonly label: string;
   readonly settlement: SettlementMode;
+  /**
+   * WHAT CAN GO WRONG ON THIS RAIL, in the rail's own words — cycle 4.
+   *
+   * Declared rather than measured, and it sits beside the measured count
+   * deliberately. Each alone misleads: `demo-internal` has zero failures
+   * because NOTHING EVER LEAVES THE BUILDING, and a zero that means "we never
+   * tried" is indistinguishable from one that means "it always works". Only
+   * this sentence can tell them apart. Conversely a declared danger alone is
+   * what the pricing dropdown already had — prose nobody can check.
+   *
+   * One sentence, present tense, no hedging. It must be true before the rail
+   * has ever been used, because that is when it matters most.
+   */
+  readonly failureModes: string;
+  /** Who can independently check a settlement on this rail. See above. */
+  readonly verifiability: Verifiability;
   prepare(req: TransferRequest): Promise<TransferPreview>;
   execute(req: TransferRequest): Promise<TransferReceipt>;
   /** Re-derives the movement from the rail's own records. Returns one of the
