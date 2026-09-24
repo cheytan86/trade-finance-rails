@@ -159,6 +159,50 @@ npm run build        succeeds — 10 routes, all dynamic
 
 ---
 
+## Reconciled against the diff — Section D, 2026-09-24
+
+`git diff --name-only 94a6398` (the branch parent) gives **33 files**. Against
+`main` it gives 150, because `main` holds no application code at all and the
+diff would carry cycles 0–2 with it — so the branch parent is the honest
+comparison for this slice, and both numbers are recorded rather than the
+convenient one.
+
+**Every file accounted for:**
+
+```text
+allow-list, modified        schema.ts · types.ts · circle.ts · usdc.ts ·
+                            demo-internal.ts · verify-circle.ts · pending.ts ·
+                            ops/page.tsx · verify-circle.test.ts ·
+                            pending.test.ts · eval-circle-fiat.mts       (11)
+allow-list, NOT needed      rails/index.ts (6) and circle.test.ts (12) were
+                            named and never touched — the registry needed no
+                            change and the signature ripple never reached
+                            circle.test.ts
+new, named in the contract  ops/payments/page.tsx · [paymentId]/page.tsx ·
+                            lib/reconciliation/{queue,candidates,booked,
+                            actions}.ts · components/payment-*.tsx ·
+                            drizzle/0007_reconciliation.sql ·
+                            scripts/eval-reconciliation.mts (14)
+feature folder              attribution.ts + .test.ts · fixtures/{payments,
+                            legs,index}.ts + fixtures.test.ts
+Gate 0.5 rails              .env.example · AGENTS.md · this manifest
+docs                        evals.md · develop-1-substrate.md
+UNTOUCHABLE, one line       src/lib/ledger/index.ts — "unapplied" added to
+                            CLIENT_MONEY_KINDS, on Chetan's explicit approval
+                            after a stop-and-ask. bookMovement untouched.
+```
+
+**One file in the diff the contract never named:** `drizzle/meta/_journal.json`.
+It is drizzle's migration ledger and cannot be separated from writing a
+migration — recorded here rather than left as an unexplained line in the diff.
+
+**One promise the contract made and this slice did not keep:** it named
+`src/lib/reconciliation/*.test.ts` and **none were written**. The four query
+and action modules are covered by the eval harness against live data and by
+`attribution.test.ts`'s 36 tests, but not by the suite. That is a gap, and it
+is listed as limitation 3 in `develop-1-substrate.md` rather than being read as
+coverage.
+
 ## Progress
 
 | prompt | what | files | verified |
@@ -169,6 +213,7 @@ npm run build        succeeds — 10 routes, all dynamic
 | A2 | states and transitions — the derived state model, FIX A, FIX B, A3 | **new:** `attribution.ts`, `attribution.test.ts` · **modified:** `verify-circle.ts` (7), `pending.ts` (8), `verify-circle.test.ts` (10), `pending.test.ts` (11) | ✅ 2026-09-23 · 237 tests · build ✓ |
 | smoke | the spine walked on the fiat rail after A2 touched two money-path files | deal `9cc15acd`, face 200.00 → `settled`, five legs, **all five booked unattended** (`applied=5`), `client_collections` 0.00, net 0.00 | ✅ 2026-09-23 · Chetan |
 | schema | `unapplied` account kind · `attribution_reason` enum · `inbound_payments` table · `unapplied` added to CLIENT_MONEY_KINDS | **new:** `drizzle/0007_reconciliation.sql` · **modified:** `src/db/schema.ts` (1), `drizzle/meta/_journal.json`, **`src/lib/ledger/index.ts` (untouchable — one line, on Chetan's explicit approval)** | ✅ 2026-09-23 · applied to the live database and read back |
+| D | evidence + final gate — manifest reconciled, 8 rows written, flag-off proved on a production build | **new:** `docs/product/reconciliation-ops/develop-1-substrate.md` | ✅ 2026-09-24 |
 | C | the five evals, run against the real slice | **new:** `scripts/eval-reconciliation.mts` (14), `docs/product/reconciliation-ops/evals.md` · **modified:** `pending.ts` (8), `pending.test.ts` (11) | ✅ 2026-09-24 · **5 pass · 0 partial · 0 fail** |
 | B2 | native polish — the vocabulary audit and the states nobody designed | **modified:** `queue.ts`, `/ops/payments/page.tsx`, `/ops/page.tsx` (9) | ✅ 2026-09-23 · 237 tests · build ✓ |
 | smoke 2 | the spine re-walked after A3–B1 touched `/ops/page.tsx` — INV-2323-034 to `disbursed`, the pay page, the role gate | deal `03b07e7e` on demo-internal | ✅ 2026-09-23 · Chetan |
