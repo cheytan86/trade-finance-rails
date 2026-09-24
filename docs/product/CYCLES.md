@@ -249,6 +249,62 @@ setting up a programme. Not buildable now — **the programme does not exist**
 from rail costs, so the view would today show three identical numbers. Routed
 to cycle 6, where both objections dissolve.
 
+## Neither party can see what they were paid (2026-09-24)
+
+**Found by Chetan walking the spine end to end during cycle 4's FIX 1 smoke
+path, and — for the supplier half — independently by cycle 4's Discovery
+reading the file the same day. Two routes to the same finding.**
+
+Neither is caused by FIX 1, and both predate it. Neither is a defect in
+anything that was built; both are surfaces that were never built.
+
+### The supplier cannot see the residual, or the disbursement, or anything
+
+`src/app/supplier/page.tsx:119-124` renders **four columns**: debtor · face
+value · due date · status. That is the supplier's entire view of their own
+money.
+
+So a supplier is paid **twice** — the disbursement at funding, the residual at
+settlement — and **sees neither amount**. They watch a status pill change. The
+`supplier_payable` account exists and is resolved in `src/lib/queries.ts:54`,
+and **no supplier-facing screen reads it.**
+
+`src/lib/pricing/index.ts` computes `supplierDisbursementMinor` and
+`supplierResidualMinor` on every pricing run. Both are shown to ops. Neither
+reaches the person they belong to.
+
+### The funder cannot see what they earned
+
+`funderPositions` (`src/lib/queries.ts:243`) filters
+`inArray(invoices.status, ["funded", "disbursed"])`. Once a deal repays, it
+**leaves the list**.
+
+That is defensible — a position is capital currently deployed, and repaid
+capital is not deployed. But the consequence is that the funder's cash balance
+rises by their return and **nothing on their screen says which deal produced
+it.** No closed positions, no return history. They can see they are richer and
+not why.
+
+The deal page already concedes the point in a comment at line 359: *"the
+funder's own decision surface arrives with the funding-models cycle."*
+
+### Where they go
+
+```text
+the supplier's money view   CYCLE 6 — the programme. It is the same screen
+                            as the supplier-facing rail view above: a
+                            supplier who can see what they were paid is
+                            part of what a signed programme means.
+the funder's closed book    CYCLE 5 — funding models, which already promises
+                            "positions in the ledger" and the funder's own
+                            decision surface.
+```
+
+**Not fixed in cycle 4**, deliberately: both are screens rather than lines,
+`/supplier/page.tsx` and `/funder/page.tsx` are off this cycle's allow-list,
+and the supplier view needs a decision nobody has taken — whether a supplier
+sees the platform's margin.
+
 ## The three-account restructure — proposed at cycle 3, routed to cycle 10
 
 **Proposed 2026-09-21 (Chetan):** split the account model into a Disbursement
