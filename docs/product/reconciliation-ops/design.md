@@ -509,7 +509,16 @@ feature with its own approval path.
 
 **Files:** new action · `src/db/schema.ts`
 
-### EPIC F — Remember the sender · `SLICE 2`
+### EPIC F — Remember the sender · `SLICE 2` — **NOT BUILT (2026-09-24)**
+
+> **Closed at slice 2's Gate 0.5 without being built.** F4.1 required the demo
+> gap solved first; measuring it found that `source.id` identifies **the
+> platform's own receiving VAN, not the payer** — 24 deposits, 2 distinct
+> values, both of them our own registered wire accounts. Keyed on that field
+> the learned rule is wrong by construction. Chetan's decision, recorded with
+> the measurement, in `develop-2-epic-f.md`. **Everything below is preserved as
+> designed, including the two corrections that did not go far enough** — the
+> third reading is in that file.
 
 > *As ops, I want a payment from a sender I have identified before to arrive
 > already matched to a suggested leg, so that the same identification work is not
@@ -809,6 +818,12 @@ SLICE 2   Epic F
           Built second, against a working substrate. Needs the F1 migration.
           Has a known demo gap (F4) to solve before it is built.
 ```
+
+**Outcome, 2026-09-24: slice 1 built and deployed; SLICE 2 NOT BUILT.** F4 was
+the gate the design put in front of it, and F4 held — the gap is real and its
+cause is not what this file recorded. The build order was right; what it
+guarded against turned out to be fatal rather than solvable. Evidence:
+`develop-2-epic-f.md`.
 
 Slice 1 is a complete feature without slice 2: ops sees the money and attributes
 it by hand every time. Slice 2 only removes repeated work, and only makes sense

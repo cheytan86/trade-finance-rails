@@ -15,6 +15,15 @@ error**, checked on the server as well as in the browser.
 **Two slices. This run builds SLICE 1 only** (epics A–E). Slice 2 (epic F —
 remember the sender) is a separate Develop run against the same design file.
 
+> **SLICE 2 CLOSED WITHOUT BEING BUILT, 2026-09-24.** Its Gate 0.5 measured
+> F4's demo gap and found `source.id` identifies the platform's own receiving
+> VAN rather than the payer — 24 deposits, 2 distinct values, both our own
+> registered wire accounts. The learned rule would be wrong by construction.
+> Chetan's decision; evidence and reasoning in
+> `docs/product/reconciliation-ops/develop-2-epic-f.md`. **No files were
+> created, no rails set, no migration written.** The allow-list below is
+> therefore final for this cycle.
+
 ### Why the cycle exists, in one number
 
 Reconciling the live Circle sandbox against `settlement_events` on 2026-09-21:

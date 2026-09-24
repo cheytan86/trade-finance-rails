@@ -150,6 +150,43 @@ assumes it three times; `grep -i unapplied` across `src/` and `drizzle/`
 returns zero), a `listInbound()` rail capability, and a register of which
 external bank account belongs to which party.
 
+### Cycle 3 closed with one epic unbuilt (2026-09-24)
+
+**Epic F — remember the sender — was designed and NOT built.** Its own F4 gate
+required the sandbox demo gap solved before building. Measuring it at slice 2's
+Gate 0.5 found the gap is real and its cause is not what the design recorded:
+**`source.id` identifies the platform's own receiving Virtual Account Number,
+not the payer.** 24 deposits carry 2 distinct values, and both are our own
+registered wire accounts. A rule learned on that field would suggest by which
+of our mailboxes the money arrived in, so with N debtors it is wrong by
+construction rather than by accident.
+
+The deterministic alternative the design itself wrote out — one VAN per
+counterparty, making `source.id` a lookup rather than a learned rule — needs
+Circle **institutional subaccounts**, which need a negotiated commercial
+agreement. It is recorded against **cycle 10** with the rest of the segregation
+mechanism.
+
+Full measurement and reasoning: `docs/product/reconciliation-ops/develop-2-epic-f.md`.
+
+**Two consequences carried forward:**
+
+1. **`unapplied` ships declared and unused.** Slice 1 did not need it (a part
+   payment has no remainder — the LEG is short) and slice 2 was not going to.
+   Its tenant is an **overpayment control**: `debtor_cash −X / unapplied +X`
+   when the payer is known but the invoice is not. Whichever cycle takes
+   overpayment on should build it. A declared-and-unused enum value is the
+   shape that produced two real defects in this project already.
+2. **The inbound target is discovered, not configured — and it has moved.**
+   `platformInboundTarget()` (`src/lib/rails/circle.ts:69`) takes
+   `accounts.find(a => a.status === "complete")`. Wire account `b5ac0172` was
+   `pending` on 2026-09-22 and is now `complete` and listed first, so the
+   platform is telling debtors to wire to the account created for a test.
+   Nothing is broken — matching is on amount and window — but the design named
+   this a latent defect and it has now fired, caught only by a measurement
+   taken for another purpose. **Trigger: the first cycle that touches
+   `circle.ts` again**, most likely cycle 6.
+
 **The finding that justified the cycle.** Reconciling the live Circle sandbox
 against `settlement_events` on 2026-09-21: **13 deposits, 10 attributed, 3
 unattributed, $50,105.00**. `docs/product/circle-fiat/release.md` had recorded
