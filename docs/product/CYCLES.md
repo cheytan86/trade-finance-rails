@@ -17,7 +17,7 @@ that was expected FULL. Cycle 0's ran 2026-09-06: FULL, four of five.
 | 1 | **Settlement seam + USDC rail** | FULL | 0 | Proves the rail abstraction on the rail that already works; mode 3 (all-stablecoin) falls out. **The one to get right** — every later rail is an implementation behind this interface. |
 | 2 | **Fiat rail — Circle sandbox** | FULL | 1 | Async settlement, webhook signatures, idempotency, out-of-order delivery. First step: fund the sandbox balance and register a test bank account (recorded in STACK_RULES.md so it isn't a mid-cycle surprise). **Async-only — hybrid moved out 2026-09-15, see the programme note below.** |
 | 3 | **Reconciliation ops** | FULL *(confirmed)* | 2 | The five exceptions, fixed at Discovery 2026-09-21: unmatched payment · ambiguous match · part payment · exception aging · the double-book refusal. **Reversals and failed screening moved out — see the note below.** **Mode 1 (all-fiat) completes here**; mode 2 (hybrid) now completes at cycle 6 with the programme. |
-| 4 | **Priced rail comparison v1** | likely LIGHT | 1–3 | **The headline, pulled forward** — one invoice, three rails, cost/speed/risk side by side. Needs only cycles 1–3, so the project's core claim exists by roughly week 7 even if everything after slips. Extends when the third rail lands (11). |
+| 4 | **Rail comparison v1** *(renamed from "Priced rail comparison v1", 2026-09-24)* | **FULL** *(confirmed at Discovery; the "likely LIGHT" prediction was wrong)* | 1–3 | **The headline, pulled forward** — one invoice, three rails, **speed and risk** side by side, both measured from the product's own `pending_settlements` records rather than asserted in prose. Needs only cycles 1–3. **Cost was removed from v1 on 2026-09-24**: Circle publishes no fee schedule and the sandbox charges nothing, so one of three cost cells has no honest number — see the note below. Extends when the third rail lands (11). |
 | 4a | **Accounts mode** — real sign-in behind the `getIdentity()` seam, user↔party binding, onboarding; `AUTH_MODE` switch, second (login-gated) deployment | FULL | 0, 4 | *Added 2026-09-06 at Chetan's direction.* One codebase, two deployments — never two repos. Slotted after the headline so the job-search asset is never delayed by auth work. Adds ~3 weeks plus a both-modes test surcharge on every later cycle — accepted knowingly. |
 | 5 | **Funding models** — on-demand + committed facility, positions in the ledger | FULL | 1 | Undrawn carry displayed — instant funding costs the funder carry, and the product shows it rather than pretending it's free. |
 | 6 | **Credit assessment + the programme** — written policy, deterministic scorecard (every score cites its rule), rating, real registry lookup (never scored); **plus the programme itself**: the supplier × buyer RPA holding the grid (rate by rating band × tenor), the tier schedule, and the **settlement arrangement**. Pricing becomes **read-only** — the system applies the signed grid; ops overrules only with a recorded reason. Hybrid mode completes here. | FULL | 1, 2 | The KYC method applied to a third domain — the portfolio's thesis. Calibration disclaimed wherever scores render. *Scope extended 2026-09-15 — see the programme note below.* |
@@ -195,6 +195,59 @@ the basis of a go/no-go decision. It was wrong by $50,005 — not through
 carelessness, but because nothing in the product could check.
 
 Full reasoning: `docs/product/reconciliation-ops/discovery.md`.
+
+## Cycle 4 lost its cost column — and cycle 6 gained a defect (2026-09-24)
+
+**Decided at cycle 4's Discovery grill, Chetan's.** The cycle was designed as
+*cost/speed/risk side by side*. Cost came out of v1, because one of the three
+cells cannot be filled honestly: Circle publishes no fee schedule (cycle 3's
+design recorded the page as *"behind a support page that does not render"*) and
+the sandbox charges nothing. The alternatives were to seed it with a labelled
+assumption or to show the gap; Chetan chose to drop the column rather than
+carry a number that is an input dressed as evidence.
+
+**What that costs, stated rather than absorbed:** `YOUR_PRODUCT.md` frames this
+product as one where the rail is *"an explicit, **priced** decision"*. Cycle 4
+now proves *explicit* and *measured*, not *priced*. The claim stays half-proven
+until rail costs land in cycle 6's signed grid.
+
+**What cycle 4 gained instead:** speed and risk both become **measurements**
+rather than prose. `pending_settlements` has carried `rail`, `initiatedAt` and
+`resolvedAt` for every leg since cycle 2 — `settleLeg` is rail-neutral, which
+was that cycle's FIX 1 — and nothing has ever read it. Measured on 2026-09-24:
+circle-fiat 29 legs, median 54.9 s, slowest 10.2 min; demo-internal 7 legs;
+usdc **zero**, because cycle 1's Base Sepolia settlements predate the table.
+
+### The defect this routed here
+
+**`txnCost` is a margin line wearing a fee's clothes.** `src/lib/pricing/index.ts:50-62`:
+
+```text
+supplierDisbursement = principal − supplierInterest − txnCost
+platformMargin       = funderFinancing − supplierDisbursement
+```
+
+The transaction cost is deducted from **the supplier**, and since margin is the
+gap between the two sides, it flows straight into `platformMargin`. Meanwhile
+`account_kind` has no expense account, so the platform paying Circle a wire fee
+is not a movement this ledger can record. The product charges a cost, books it
+as margin, and never records paying it.
+
+That contradicts two things already written down: the code's own comment two
+lines below (*"fees are visible lines, never margin (paper §7/§9)"*), and the
+rail-cost policy set on 2026-09-22 — under which the supplier bears **only**
+per-debtor VANs, **recovered in the rate, never as a line item**, while the
+code charges them every transaction cost as a line item.
+
+**Cycle 6 owns it**, alongside the rail-cost pricing already routed there.
+
+### And the supplier-facing view
+
+Chetan's instinct at the grill: the supplier should know rail costs before
+setting up a programme. Not buildable now — **the programme does not exist**
+(cycle 6 builds it), and under the 2026-09-22 policy the supplier is insulated
+from rail costs, so the view would today show three identical numbers. Routed
+to cycle 6, where both objections dissolve.
 
 ## The three-account restructure — proposed at cycle 3, routed to cycle 10
 
