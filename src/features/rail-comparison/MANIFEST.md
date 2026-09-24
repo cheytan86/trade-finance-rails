@@ -76,6 +76,10 @@ discovered as an unexplained line in a diff.*
  6. src/lib/rails/circle.ts             its declarations
  7. src/app/ops/deals/[id]/page.tsx     render the comparison inside stage 2,
                                         flag-gated
+ 9. scripts/eval-rail-comparison.mts    cycle 4's eval harness — the cases need
+                                        the LIVE database, and case 5 needs a
+                                        before/after snapshot of a whole deal.
+                                        Read-only: it creates nothing.
  8. scripts/eval-circle-fiat.mts        cycle 2's eval harness holds a stub
                                         rail; adding failureModes +
                                         verifiability to the interface makes
@@ -97,7 +101,7 @@ half a contract.
 words: "optional is how a rail ends up silently answering 'nothing arrived'
 instead of 'I have no outside'." A red `tsc` here is the feature working.*
 
-**Eight files. Anything else is a stop-and-ask, including a shared component, a
+**Nine files. Anything else is a stop-and-ask, including a shared component, a
 config, or a dependency. "It would be cleaner" is never sufficient.**
 
 ### Deliberately NOT on the allow-list
@@ -192,3 +196,4 @@ npm run build        succeeds — 12 routes, all dynamic
 | A3 | the rail declarations — `failureModes` + `verifiability` on the interface, answered by all three rails, plus a test that they say something | **modified:** `types.ts` (3), `demo-internal.ts` (4), `usdc.ts` (5), `circle.ts` (6), `pending.test.ts` (2), `eval-circle-fiat.mts` (8 — **stop-and-ask, approved**) · `history.test.ts` (mine) | ✅ 2026-09-24 · 259 tests · build ✓ |
 | A4 | the table on screen — inside stage 2, flag-gated, rendered only while the rail is still choosable | **new:** `src/components/rail-comparison.tsx` · **modified:** `/ops/deals/[id]/page.tsx` (7) | ✅ 2026-09-24 · 259 tests · build ✓ 12 routes |
 | B | native polish — the vocabulary audit, the error sentence, and a Suspense boundary so a decision aid never blocks a pricing decision | **modified:** `rail-comparison.tsx` (mine), `/ops/deals/[id]/page.tsx` (7) | ✅ 2026-09-24 · 259 tests · build ✓ |
+| C | the five evals, run against the live database | **new:** `scripts/eval-rail-comparison.mts` (9 — **stop-and-ask, approved**), `docs/product/rail-comparison/evals.md` | ✅ 2026-09-24 · **5 pass · 0 partial · 0 fail**, after hardening case 1 |
