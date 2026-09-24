@@ -138,6 +138,17 @@ screen in the product wait on Circle before drawing a row.
 No `loading.tsx` was added at `/ops`, deliberately: that would change how an
 existing host screen behaves for content this cycle did not build.
 
+**Verified on the rebuilt preview by Chetan, 2026-09-24** — the same person, the
+same host, the same click that found it:
+
+```text
+/ops              the deal book paints immediately; the money-received card
+                  fills in behind it                                    ✓
+/ops/payments     three placeholder cards on the instant of the click   ✓
+```
+
+A defect found by a host is only closed when that host says so. This one is.
+
 ### Finding 2 — the role switcher lags, and it is NOT this cycle's
 
 **Chetan:** *"when i click on the roles… there i see lag… it does not feel
