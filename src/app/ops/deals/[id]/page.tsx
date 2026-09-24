@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { parseSnapshot, computePricing } from "@/lib/pricing";
 import { seatGate } from "@/lib/roles/gate";
 import { TradeValidation } from "@/components/trade-validation";
 import { PricingForm } from "@/components/pricing-form";
-import { RailComparison } from "@/components/rail-comparison";
+import { RailComparison, RailComparisonSkeleton } from "@/components/rail-comparison";
 import { PricingResults } from "@/components/pricing-results";
 import { ConfirmDialog, type DialogEntry } from "@/components/ui/confirm-dialog";
 import { InFlightStrip } from "@/components/in-flight-strip";
@@ -315,7 +316,14 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
           {process.env.NEXT_PUBLIC_ENABLE_RAIL_COMPARISON &&
           (invoice.status === "approved" || invoice.status === "priced") ? (
             <div className="mt-5 border-t border-line pt-4">
-              <RailComparison />
+              {/* Suspended so the rest of stage 2 — the breakdown and the rate
+                  card — paints without waiting on a database query. Cycle 3's
+                  Deploy found the app had zero loading states and a click on a
+                  money screen showed two seconds of nothing; that defect was
+                  invisible locally and only a real host revealed it. */}
+              <Suspense fallback={<RailComparisonSkeleton />}>
+                <RailComparison />
+              </Suspense>
             </div>
           ) : null}
 

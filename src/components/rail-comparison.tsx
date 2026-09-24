@@ -52,7 +52,7 @@ function Speed({ d }: { d: RailDuration }) {
   return (
     <span className="font-mono text-[13px]">
       {duration(d.medianMs)}
-      <span className="ml-1.5 text-[12px] text-muted">
+      <span className="ml-2 text-[12px] text-muted">
         median of {d.count}
         {d.count > 1 ? ` · slowest ${duration(d.slowestMs)}` : ""}
       </span>
@@ -116,8 +116,64 @@ function WhatCanGoWrong({ h, modes }: { h: RailHistory; modes: string }) {
   );
 }
 
+/**
+ * WHAT A PERSON SEES WHILE THE QUERY RUNS.
+ *
+ * Cycle 3 paid for this lesson at Deploy: the application had ZERO loading
+ * states, a click on a money screen showed two seconds of nothing, and the
+ * defect was invisible locally because the database was 40 ms away. This table
+ * adds a query to the busiest screen in the product, so it gets a Suspense
+ * boundary and the rest of stage 2 paints without waiting for it.
+ *
+ * Same shape and heading as the real thing, so nothing jumps when it arrives.
+ * Nothing animates — a spinner would be a new idiom in a host that has none.
+ */
+export function RailComparisonSkeleton() {
+  return (
+    <Card
+      title="What each rail has actually done"
+      sub="Counting this platform's own settlements…"
+    >
+      <p className="text-[13px] text-muted">
+        Nothing here is stored or cached — the figures are counted afresh every time this
+        stage opens, so they are what the platform has done as of right now.
+      </p>
+    </Card>
+  );
+}
+
 export async function RailComparison() {
-  const history = await loadRailHistory();
+  let history;
+  try {
+    history = await loadRailHistory();
+  } catch {
+    // A PRICING DECISION IS NEVER BLOCKED BY A DECISION AID. Cycle 3's D2
+    // found the mirror of this: a rail with no timeout would have hung the ops
+    // deal book until the serverless function itself gave up, showing nothing.
+    //
+    // WHAT THIS DOES NOT PROTECT AGAINST, stated rather than implied. If the
+    // database is wholly unreachable the page is already gone — `invoiceDetail`,
+    // `movementsForInvoice`, `accountRefsFor` and `legsForInvoice` all run
+    // before this component renders. So this catch covers a failure SPECIFIC
+    // to this query — a timeout as `pending_settlements` grows, a migration
+    // mid-flight — and not an outage. It is worth having for exactly that, and
+    // claiming more would be a comment that flatters the code.
+    //
+    // The sentence says we could not ASK — never "these rails have no
+    // history", which is a different statement and a false one. Cycle 3 fixed
+    // that exact class twice: an empty list must never read as "nothing
+    // arrived".
+    return (
+      <Card title="What each rail has actually done">
+        <p className="text-[13px] text-muted">
+          We could not read this platform&rsquo;s settlement history just now, so this
+          comparison is unavailable. The rail choice below is unaffected — nothing here
+          feeds the pricing.
+        </p>
+      </Card>
+    );
+  }
+
   const excluded = history.reduce((n, h) => n + h.excludedImpossible, 0);
 
   return (
