@@ -394,7 +394,7 @@ async function case4() {
 async function case5() {
   const notes: string[] = [];
   const amount = 5_00n; // deposit 46069659
-  const { invoiceId, legId } = await dealAwaiting(amount);
+  const { legId } = await dealAwaiting(amount);
   const ref = await orphanOf(amount);
   if (!ref) return record(5, "the refusals", "PARTIAL", [...notes, "no unattributed 5.00 deposit to use"]);
 
