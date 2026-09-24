@@ -120,6 +120,57 @@ The cycle's own rules, which do not survive being forgotten:
 
 <!-- END:feature-reconciliation-ops -->
 
+<!-- BEGIN:feature-rail-comparison -->
+
+## Cycle 4 — rail comparison, branch `feat/rail-comparison`
+
+Boundary: `src/features/rail-comparison/MANIFEST.md` is the contract — a
+**seven-file** allow-list plus named new files. ENHANCE with FIX 1.
+**An unnamed modification is a stop-and-ask.** Flag
+`NEXT_PUBLIC_ENABLE_RAIL_COMPARISON`: absent means off, never an error, checked
+server-side too. **One slice**, and FIX 1 goes first inside it.
+
+The cycle's own rules, which do not survive being forgotten:
+
+- **`src/lib/pricing/` is UNTOUCHABLE THIS CYCLE, specifically.** Discovery
+  found a real defect there — `txnCost` is deducted from the supplier and flows
+  into `platformMargin`, while no account kind records the platform paying a
+  rail at all. It contradicts the file's own comment (*"fees are visible lines,
+  never margin"*) and the rail-cost policy set 2026-09-22. **It is routed to
+  cycle 6 and must not be half-repaired here.** A defect you repair badly is
+  worse than one you routed.
+
+- **This feature has NO CONSEQUENCE, and that is the property to protect.** It
+  renders; it writes nothing but FIX 1's timestamp source. Eval case 5 proves
+  it: price a deal flag-on and flag-off, and `invoices.rail`, the pricing
+  snapshot and every ledger entry must be **byte-identical**. With no agent and
+  no consequence, the hard limit is not a refusal but an absence.
+
+- **`src/components/pricing-form.tsx` is deliberately OFF the allow-list.** The
+  comparison is a server-component sibling; the `<select>` and its prose keep
+  their job. If the form must change, stop and ask.
+
+- **NEVER rank, sort by, highlight or badge a rail as preferred.** Fixed order,
+  always. Cycle 3 fixed this principle in code — *"ambiguity is a choice
+  presented, never a guess made"* — and a "recommended" chip here is the same
+  mistake in new clothes. The verifiability column is the one most likely to
+  read as a ranking: *"anyone, on-chain"* sounds better than *"us only"*.
+
+- **NEVER show a measured figure without its sample size**, and never print a
+  figure the data cannot support: a negative duration, a median of one
+  observation, or a sub-second number.
+
+- **An empty rail says so in words.** `usdc` has zero rows today. It must read
+  *"no settlements yet"* — never `0`, never `—`, never "instant". Cycle 3's
+  B1.3 fixed this exact class: an empty list must never read as "nothing
+  arrived".
+
+- **No migration.** Both measured columns are aggregates over rows that exist;
+  both declared columns are properties of the rail, which is code. If a schema
+  change appears, stop — it is surfaced twice or not at all.
+
+<!-- END:feature-rail-comparison -->
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
