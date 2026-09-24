@@ -16,6 +16,7 @@ import { parseSnapshot, computePricing } from "@/lib/pricing";
 import { seatGate } from "@/lib/roles/gate";
 import { TradeValidation } from "@/components/trade-validation";
 import { PricingForm } from "@/components/pricing-form";
+import { RailComparison } from "@/components/rail-comparison";
 import { PricingResults } from "@/components/pricing-results";
 import { ConfirmDialog, type DialogEntry } from "@/components/ui/confirm-dialog";
 import { InFlightStrip } from "@/components/in-flight-strip";
@@ -297,6 +298,26 @@ export default async function DealPage({ params }: PageProps<"/ops/deals/[id]">)
               No rate card yet — set one below and the full breakdown appears here.
             </p>
           )}
+
+          {/* CYCLE 4 — the rail comparison, INSIDE the stage whose decision it
+              informs rather than as a banner above it. That placement is
+              cycle 2's in-flight-strip rule applied: "it sits INSIDE the stage
+              whose gate is waiting, not as a banner". This is evidence for a
+              choice being made here, not an announcement about the deal.
+
+              Rendered only while the rail is still choosable — once the deal
+              is funded the snapshot is locked and the rail cannot move, so a
+              comparison would be describing a decision nobody can take.
+
+              Flag absent means off, and off means the stage renders exactly as
+              it did before this cycle: the dropdown and its prose, nothing
+              more. */}
+          {process.env.NEXT_PUBLIC_ENABLE_RAIL_COMPARISON &&
+          (invoice.status === "approved" || invoice.status === "priced") ? (
+            <div className="mt-5 border-t border-line pt-4">
+              <RailComparison />
+            </div>
+          ) : null}
 
           {invoice.status === "approved" || invoice.status === "priced" ? (
             <div className="mt-5 border-t border-line pt-4">
