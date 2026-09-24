@@ -346,13 +346,22 @@ describe.skipIf(!HAS_DB)("one leg is never in flight twice", () => {
     const before = await balances(db);
     const b = await settleLeg(db, spec(second), () => instantRail(shared));
 
-    expect(b.status).toBe("failed");
-    expect((b as { reason: string }).reason).toMatch(/already settled a different leg|belongs to another/);
-    // Nothing booked, nothing moved, and the row says failed — NOT settled.
+    // THE REFUSAL IS UNCHANGED AND RE-ASSERTED: nothing books, nothing moves,
+    // and it is emphatically not read as "already done".
+    expect(b.status).not.toBe("settled");
     expect(await countEvents(second)).toBe(0);
     expect(await balances(db)).toEqual(before);
+
+    // WHAT CHANGED AT CYCLE 3 (FIX B, second direction). This used to mark the
+    // leg `failed`, which is terminal — so a leg that nothing was wrong with
+    // died while the money sat there. Two legs of the same amount is ordinary,
+    // the deposit is real, and one of them is very likely its owner. The
+    // product has discovered that it CANNOT TELL, which is an exception for a
+    // person, not a failure of the payment.
     const [row] = await pendingRowsFor(second);
-    expect(row.status).toBe("failed");
+    expect(row.status).not.toBe("failed");
+    expect(["initiating", "initiated"]).toContain(row.status);
+    expect(row.resolvedAt).toBeNull();
   });
 
   // Deploy, 2026-09-18. The webhook route decides "did THIS delivery book it?"

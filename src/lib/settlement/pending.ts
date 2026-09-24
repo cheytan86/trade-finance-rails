@@ -310,11 +310,26 @@ export async function completeSettlement(
     .from(settlementEvents)
     .where(eq(settlementEvents.evidenceRef, verified.reference));
   if (claimed && claimed.key !== row.idempotencyKey) {
-    const reason =
-      `the rail's record for this leg points at ${verified.reference}, which already settled a different leg. ` +
-      `Nothing has been booked — this is a reconciliation exception (cycle 3).`;
-    await markFailed(db, pendingId, reason);
-    return { status: "failed", reason, pendingId };
+    // FIX B, SECOND DIRECTION (cycle 3). Found by cycle 3's own eval harness
+    // on 2026-09-24, and the comment above had already named it: "this is a
+    // reconciliation exception (cycle 3)".
+    //
+    // FIX B's first half handled TWO DEPOSITS matching ONE LEG — the matcher
+    // now parks instead of throwing. This is the mirror: ONE DEPOSIT that two
+    // legs both recognise. It still called markFailed, so a leg that nothing
+    // was wrong with died terminally while the money sat there — the exact
+    // harm FIX B exists to prevent, reached through the other door.
+    //
+    // Nothing failed here either. Two legs of the same amount is ordinary,
+    // the deposit is real, and one of these legs is very likely its owner.
+    // What the product has discovered is that it CANNOT TELL — so the leg
+    // stays in flight, nothing books, and the payment surfaces in the
+    // reconciliation queue for a person to attribute.
+    return {
+      status: "pending",
+      reference: row.railReference,
+      pendingId,
+    };
   }
 
   const entries = parseStoredEntries(row.entries);

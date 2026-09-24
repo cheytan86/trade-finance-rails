@@ -69,6 +69,9 @@ drizzle/0007_*.sql                         ONLY after per-change re-approval
                                            key permits a second
 12. src/lib/rails/circle.test.ts           only if matchInboundDeposit's
                                            signature change ripples
+14. scripts/eval-reconciliation.mts        cycle 3's eval harness — the five
+                                           cases need state a person cannot
+                                           arrange by clicking
 13. scripts/eval-circle-fiat.mts           cycle 2's eval harness holds a stub
                                            rail; adding listInbound() to the
                                            interface makes EVERY implementor
@@ -77,7 +80,7 @@ drizzle/0007_*.sql                         ONLY after per-change re-approval
                                            rail what has arrived.
 ```
 
-**Thirteen files. Anything else is a stop-and-ask, including a shared component,
+**Fourteen files. Anything else is a stop-and-ask, including a shared component,
 a config, or a dependency. "It would be cleaner" is never sufficient.**
 
 *Item 13 added 2026-09-23 as a second stop-and-ask, during A3. Making
@@ -166,6 +169,7 @@ npm run build        succeeds — 10 routes, all dynamic
 | A2 | states and transitions — the derived state model, FIX A, FIX B, A3 | **new:** `attribution.ts`, `attribution.test.ts` · **modified:** `verify-circle.ts` (7), `pending.ts` (8), `verify-circle.test.ts` (10), `pending.test.ts` (11) | ✅ 2026-09-23 · 237 tests · build ✓ |
 | smoke | the spine walked on the fiat rail after A2 touched two money-path files | deal `9cc15acd`, face 200.00 → `settled`, five legs, **all five booked unattended** (`applied=5`), `client_collections` 0.00, net 0.00 | ✅ 2026-09-23 · Chetan |
 | schema | `unapplied` account kind · `attribution_reason` enum · `inbound_payments` table · `unapplied` added to CLIENT_MONEY_KINDS | **new:** `drizzle/0007_reconciliation.sql` · **modified:** `src/db/schema.ts` (1), `drizzle/meta/_journal.json`, **`src/lib/ledger/index.ts` (untouchable — one line, on Chetan's explicit approval)** | ✅ 2026-09-23 · applied to the live database and read back |
+| C | the five evals, run against the real slice | **new:** `scripts/eval-reconciliation.mts` (14), `docs/product/reconciliation-ops/evals.md` · **modified:** `pending.ts` (8), `pending.test.ts` (11) | ✅ 2026-09-24 · **5 pass · 0 partial · 0 fail** |
 | B2 | native polish — the vocabulary audit and the states nobody designed | **modified:** `queue.ts`, `/ops/payments/page.tsx`, `/ops/page.tsx` (9) | ✅ 2026-09-23 · 237 tests · build ✓ |
 | smoke 2 | the spine re-walked after A3–B1 touched `/ops/page.tsx` — INV-2323-034 to `disbursed`, the pay page, the role gate | deal `03b07e7e` on demo-internal | ✅ 2026-09-23 · Chetan |
 | B1 | every rail asked, not one — the hard-code removed | **modified:** `queue.ts`, `/ops/payments/page.tsx`, `/ops/payments/[paymentId]/page.tsx`, `actions.ts` (all mine), `/ops/page.tsx` (9) | ✅ 2026-09-23 · 237 tests · build ✓ |
@@ -188,6 +192,20 @@ unapplied cash is emphatically client money: somebody paid it and it is not the
 platform's. The first part payment to book would have rendered as platform
 funds. **`bookMovement` was not touched** — this cycle still adds no new way to
 book.
+
+### FIX B had a second direction, and the eval found it (2026-09-24)
+
+FIX B at A2 covered **two deposits matching one leg** — the matcher parks
+instead of throwing. The mirror, **one deposit that a second leg also
+recognises**, went through `completeSettlement`'s `claimed` branch and called
+`markFailed()`, killing a leg nothing was wrong with. Cycle 2's own comment
+there read *"this is a reconciliation exception (cycle 3)"*.
+
+Found by hardening case 3 after all five passed on the first clean run — which
+is exactly what the playbook's "harden one until you are genuinely unsure" is
+for. Now parks. `pending.test.ts`'s assertion moved from `status === "failed"`
+to `status is still open, resolvedAt is null, nothing booked` — a refusal
+re-asserted and strengthened, never deleted.
 
 ### The hard-code Chetan found, and what it cost (2026-09-23)
 
