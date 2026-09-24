@@ -1,8 +1,11 @@
 # Release — Fiat rail (Circle sandbox, cycle 2)
 
-> **Current decision: NO-GO, until cycle 3 slice 2 is built** — taken at the
-> R0 re-run of 2026-09-24, at the end of this file. The 2026-09-21 R0 below is
-> kept as the record of what was true then, not edited to match.
+> **Current decision: NO-GO, with no outstanding condition** — the R0 re-run of
+> 2026-09-24 parked this release until cycle 3 slice 2 was built; later the
+> same day slice 2 was closed *without* being built, and the condition was
+> re-stated rather than left unmeetable. Both are at the end of this file. The
+> 2026-09-21 R0 below is kept as the record of what was true then, not edited
+> to match.
 
 ## R0 — the go/no-go (2026-09-21)
 
@@ -368,3 +371,62 @@ knowingly.
 Invoke `/release` again when Epic F is built, evaluated and deployed. R0
 re-runs against then-current evidence. This decision records what was true on
 2026-09-24; it is not a standing verdict.
+
+---
+
+## X re-stated, the same day (2026-09-24)
+
+**The condition above became unmeetable within hours of being set, and is
+replaced rather than quietly abandoned.**
+
+Slice 2's own Gate 0.5 measured F4's demo gap and found Epic F's premise does
+not hold: **`source.id` identifies the platform's own receiving Virtual Account
+Number, not the payer.** 24 deposits carry 2 distinct values and both are our
+own registered wire accounts, so a rule learned on that field remembers which
+of our mailboxes the money arrived in. Chetan's decision, taken on that
+measurement: **do not build slice 2.** Full reasoning and the worked example:
+`docs/product/reconciliation-ops/develop-2-epic-f.md`.
+
+**"No-go until slice 2 is built" would therefore have parked this release on a
+condition nobody intends to meet** — which is not a park, it is a quiet
+abandonment wearing a park's clothes.
+
+### The replacement
+
+**X: release is revisited when cycle 3 is closed** — which it now is.
+
+```text
+slice 1     built · evaluated 5 pass · 0 partial · 0 fail · deployed 2026-09-24
+Epic F      designed and deliberately NOT built, with the measurement that
+            stopped it recorded rather than the gap left unexplained
+cycle 3     CLOSED
+```
+
+**This does not make the release a go.** It returns `circle-fiat` to an
+ordinary R0 with **no outstanding condition**. The next `/release` run weighs
+the evidence fresh, and three things will still be on the table:
+
+1. The two findings cycle 3 never reached — the open page that never learns
+   money moved, and the value-date question — now homed in `CYCLES.md` against
+   the UI revisit and cycle 6 respectively.
+2. Production Circle Mint requiring a registered business entity and a
+   negotiated commercial agreement.
+3. The structural fact that merging this branch releases three cycles at once,
+   and that `feat/circle-fiat` is an ancestor of `feat/reconciliation-ops`.
+
+**The distinction this re-statement preserves: satisfying a condition is not
+the same as deciding to ship.** Removing the condition hands the decision back
+to the person who has to make it, rather than making it for them by leaving a
+gate nobody can open.
+
+### A new fact for the next R0, found while measuring the above
+
+`platformInboundTarget()` (`src/lib/rails/circle.ts:69`) selects
+`accounts.find(a => a.status === "complete")`. Wire account `b5ac0172` was
+`pending` when cycle 3's design was written and is now `complete` and listed
+first, so **the platform is currently telling debtors to wire to the account
+created for a test.** Nothing is broken — inbound matching is on amount and
+arrival window, not on the account — but the design named this a latent defect
+and it has now fired, caught only by a measurement taken for another purpose.
+It belongs on the next R0's evidence, and its repair trigger is recorded in
+`CYCLES.md`.
