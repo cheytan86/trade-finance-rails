@@ -169,3 +169,4 @@ npm run build        succeeds — 12 routes, all dynamic
 | Gate 0 | baseline recorded | — | ✅ 2026-09-24 |
 | Gate 0.5 | contract verified line by line, rails set | `.env.example`, this manifest, `AGENTS.md` | ✅ 2026-09-24 |
 | A1 | **FIX 1** — one duration, one clock. `resolvedAt` takes `sql\`now()\`` in `markSettled` and `markFailed`, plus two regression tests | **modified:** `pending.ts` (1), `pending.test.ts` (2) | ✅ 2026-09-24 · 239 tests · **proved by reverting**: −27 ms and −55 ms with the fix out |
+| A2 | the history query — `summarise` (pure) + `loadRailHistory`, the median/slowest/did-not-settle-cleanly figures, and the impossible-duration exclusion | **new:** `src/lib/rails/history.ts`, `history.test.ts`, `src/features/rail-comparison/fixtures.ts` | ✅ 2026-09-24 · 252 tests · verified against the live database |
