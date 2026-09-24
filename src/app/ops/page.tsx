@@ -5,7 +5,11 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Amount } from "@/components/ui/amount";
 import { allInvoices, openLegs } from "@/lib/queries";
 import { seatGate } from "@/lib/roles/gate";
-import { loadAllQueues } from "@/lib/reconciliation/queue";
+import { Suspense } from "react";
+import {
+  PaymentSummaryCard,
+  PaymentSummarySkeleton,
+} from "@/components/payment-summary-card";
 
 export const dynamic = "force-dynamic";
 
@@ -16,38 +20,6 @@ export default async function OpsQueue() {
   const inFlight = await openLegs();
   const legCountFor = (invoiceId: string) =>
     inFlight.filter((l) => l.leg.invoiceId === invoiceId).length;
-  // cycle 3 — the reconciliation queue's own summary, flag-gated.
-  //
-  // THIS CALLS THE RAIL, over the network, on a page that has never needed one.
-  // So it is wrapped: if Circle is unreachable the ops queue must still render.
-  // A deal book that goes dark because a payment API timed out would be a
-  // worse defect than the one this cycle is fixing.
-  let unattributed: { count: number; minor: bigint } | null = null;
-  let railReachable = true;
-  if (process.env.NEXT_PUBLIC_ENABLE_RECONCILIATION) {
-    try {
-      // Every rail that can receive money, summed. Rails with no outside
-      // contribute nothing rather than being excluded by name.
-      const queues = await loadAllQueues();
-      let count = 0;
-      let minor = 0n;
-      let anyOk = false;
-      for (const q of queues) {
-        // A rail we could not reach makes the WHOLE total untrustworthy, so
-        // the card says so rather than quoting a figure that silently omits
-        // whatever that rail was holding.
-        if (q.status === "unreachable") railReachable = false;
-        if (q.status !== "ok") continue;
-        anyOk = true;
-        count += q.totals.unattributedCount;
-        minor += q.totals.unattributedMinor;
-      }
-      if (anyOk) unattributed = { count, minor };
-    } catch {
-      railReachable = false;
-    }
-  }
-
   const awaiting = rows.filter((r) => r.invoice.status === "submitted");
   const rest = rows.filter((r) => r.invoice.status !== "submitted");
 
@@ -83,42 +55,14 @@ export default async function OpsQueue() {
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Suspense so the DEAL BOOK paints immediately. This card is the only
+          thing on the page that makes a network call, and fetching it inline
+          made the busiest screen in the product wait on Circle before drawing
+          a single row — found at Deploy D7, 2026-09-24. */}
       {process.env.NEXT_PUBLIC_ENABLE_RECONCILIATION ? (
-        <Card>
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <div>
-              <Link className="font-medium hover:text-cobalt" href="/ops/payments">
-                Money received →
-              </Link>
-              <div className="mt-0.5 text-[12px] text-muted">
-                Only rails with an outside can receive money. Deals on
-                demo-internal and USDC settle without an inbound payment, so
-                they never appear there — the ledger still has every movement.
-              </div>
-              <div className="mt-0.5 text-[12.5px] text-muted">
-                {!railReachable
-                  ? // NOT "nothing arrived". We could not ask, and saying so is
-                    // the whole point of this cycle.
-                    "The rail could not be reached, so we cannot say what has arrived."
-                  : unattributed === null
-                    ? "No rail on this deployment receives inbound payments."
-                    : unattributed.count === 0
-                      ? "Every payment the rail holds is attributed."
-                      : "Money the ledger cannot yet account for."}
-              </div>
-            </div>
-            {railReachable && unattributed && unattributed.count > 0 ? (
-              <div className="text-right">
-                <div className="font-mono text-[19px] tabular-nums text-flight">
-                  <Amount minor={unattributed.minor} />
-                </div>
-                <div className="text-[11.5px] uppercase tracking-wide text-muted">
-                  {unattributed.count} unattributed
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </Card>
+        <Suspense fallback={<PaymentSummarySkeleton />}>
+          <PaymentSummaryCard />
+        </Suspense>
       ) : null}
       <Card
         title="Awaiting review"
