@@ -69,6 +69,9 @@ drizzle/0007_*.sql                         ONLY after per-change re-approval
                                            key permits a second
 12. src/lib/rails/circle.test.ts           only if matchInboundDeposit's
                                            signature change ripples
+15. STACK_RULES.md                         a standing constraint added at
+                                           Deploy D1: production payment
+                                           instructions never enter the repo
 14. scripts/eval-reconciliation.mts        cycle 3's eval harness — the five
                                            cases need state a person cannot
                                            arrange by clicking
@@ -80,7 +83,7 @@ drizzle/0007_*.sql                         ONLY after per-change re-approval
                                            rail what has arrived.
 ```
 
-**Fourteen files. Anything else is a stop-and-ask, including a shared component,
+**Fifteen files. Anything else is a stop-and-ask, including a shared component,
 a config, or a dependency. "It would be cleaner" is never sufficient.**
 
 *Item 13 added 2026-09-23 as a second stop-and-ask, during A3. Making

@@ -321,3 +321,34 @@ choose from once cycle 0 lands:
   2. Open the public payment link as a debtor and pay it.
   3. Switch role and confirm each role sees only its own surface.
 ```
+
+## Payment instructions never go in the repo — [DECIDED 2026-09-24]
+
+Found at cycle 3's D1 safety scan. The repo has been public since 2026-09-07,
+and cycle 2's runbook plus cycle 3's design file carry Circle **tracking
+references and Virtual Account Numbers** — literally "send money to this
+account number".
+
+**In sandbox the consequence is small**: no real money, no real wire, and the
+worst a stranger can do with their own sandbox key is create mock deposits
+that appear in the reconciliation queue as noise. They are NOT redacted,
+because the runbook has carried them publicly since cycle 2 so the marginal
+exposure is near zero, and stripping them would gut the evidentiary
+specificity these documents exist for.
+
+**The standing rule, from here:**
+
+```text
+A PRODUCTION tracking reference, Virtual Account Number, IBAN, sort code or
+account number NEVER enters this repository — public or private. Sandbox
+identifiers may, and are labelled as sandbox where they appear.
+```
+
+**And the repo's visibility is not the control.** Making it private was
+considered and set aside: it protects the future, not the past (forks, clones
+and caches already hold the history), it costs the project its purpose — cycle
+2's deploy record: *"a portfolio demo behind SSO is invisible"* — and it hides
+nothing that is actually exposed, since the Vercel previews are public with
+Deployment Protection off either way. **Privacy becomes right the moment this
+stops being a demonstration**: real money, or a real entity owning the Circle
+account. The rule above means there would be nothing historical to redact then.
