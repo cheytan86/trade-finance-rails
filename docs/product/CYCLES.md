@@ -249,6 +249,56 @@ setting up a programme. Not buildable now — **the programme does not exist**
 from rail costs, so the view would today show three identical numbers. Routed
 to cycle 6, where both objections dissolve.
 
+## A missing cookie is not a wrong seat — owed since cycle 1 (routed 2026-09-24)
+
+**Found at cycle 1's Deploy on 2026-09-15, re-found at cycle 4's Section D on
+2026-09-24, and never decided in between.** Cycle 2 and cycle 3 both ran to
+completion without it being taken.
+
+`src/lib/roles/gate.tsx:22`:
+
+```ts
+if (identity && identity.seat !== required) return <RoleGate … />;
+return null;
+```
+
+**A wrong seat is refused; a missing one falls through.** Measured against a
+production build on 2026-09-24:
+
+```text
+no cookie      /ops 200 · 58,247 B  ·  /ops/ledger 200 · 144,664 B
+               /ops/payments 200 · 105,772 B  ·  /funder · /supplier — all full
+wrong seat     /ops 12,130 B  ·  /funder 12,144 B   — the gate card, no data
+```
+
+**What it is not.** Seats are self-declared with no sign-in by design
+(`PRD.md` §1), so an anonymous visitor can mint any seat cookie anyway.
+Previews have been behind Vercel Authentication since cycle 3 and production is
+dark. Every row is sandbox or testnet demo data.
+
+**What it is.** An accident of `identity &&` rather than a stated posture — and
+**every deploy record in this project claims "an unauthorized path is refused"
+while having tested only the wrong-seat half.** True, and incomplete, since
+cycle 1.
+
+**The decision still owed** (cycle 1's words): *document it as intended, or
+treat no-cookie as no-seat and show the gate.*
+
+**Owner: cycle 4a — accounts mode**, which is the cycle that puts real sign-in
+behind the `getIdentity()` seam and is where a posture on anonymous access
+belongs. Not cycle 4: `gate.tsx` is the identity path and off its allow-list.
+
+### And the pattern, named because this is its second instance in one day
+
+Cycle 2's R0 re-run (2026-09-24) found **two of its four named findings had
+never been reached by cycle 3** — not built, not deferred with a reason, simply
+not reached. This finding is the same shape: recorded honestly, with a decision
+named, and **no owner**.
+
+**"Carried to the next session" is where findings go to disappear.** A finding
+without a numbered cycle against it is a finding that will be re-found. Both
+are now routed to numbered cycles instead.
+
 ## Neither party can see what they were paid (2026-09-24)
 
 **Found by Chetan walking the spine end to end during cycle 4's FIX 1 smoke
