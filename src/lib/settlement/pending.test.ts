@@ -488,6 +488,45 @@ describe.skipIf(!HAS_DB)("FIX A — one leg may receive more than one movement",
   });
 });
 
+describe.skipIf(!HAS_DB)("FIX 1 — one duration, one clock", () => {
+  // WHY THIS TEST EXISTS. `initiatedAt` is stamped by the database
+  // (`defaultNow()`); `resolvedAt` WAS stamped by the application
+  // (`new Date()`). Two machines, ~60 ms apart. Nothing subtracted them until
+  // cycle 4, so the disagreement was invisible for two cycles — and on
+  // demo-internal, where a whole settlement takes 78 ms, the skew is larger
+  // than the measurement. Live rows on 2026-09-24 produced a NEGATIVE median.
+  //
+  // This is the fastest rail the product has, which makes it the one that
+  // catches the defect. A test on circle-fiat would pass with the bug in place.
+
+  it("a settled leg's duration is never negative", async () => {
+    const invoiceId = await anInvoice();
+    await settleLeg(db, spec(invoiceId), () => instantRail());
+
+    const [row] = await pendingRowsFor(invoiceId);
+    expect(row.status).toBe("settled");
+    expect(row.resolvedAt).not.toBeNull();
+
+    const ms = row.resolvedAt!.getTime() - row.initiatedAt.getTime();
+    // The assertion that would have failed before the fix. Not "small" —
+    // NOT NEGATIVE. A duration below zero is not a slow rail or a fast one;
+    // it is a measurement that cannot be true.
+    expect(ms).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a FAILED leg's duration is never negative either", async () => {
+    // markFailed takes the same stamp on the same path. A rail that refuses
+    // still produced a duration, and cycle 4's comparison counts it.
+    const invoiceId = await anInvoice();
+    await settleLeg(db, spec(invoiceId), () => refusesOnVerify("ref-fix1-failed"));
+
+    const [row] = await pendingRowsFor(invoiceId);
+    expect(row.status).toBe("failed");
+    expect(row.resolvedAt).not.toBeNull();
+    expect(row.resolvedAt!.getTime() - row.initiatedAt.getTime()).toBeGreaterThanOrEqual(0);
+  });
+});
+
 async function countEvents(invoiceId: string): Promise<number> {
   const rows = await db
     .select({ id: settlementEvents.id })

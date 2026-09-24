@@ -496,17 +496,33 @@ export function actorsFor(type: LegType): { from: RailActor; to: RailActor } {
   }
 }
 
+// FIX 1 (cycle 4) — ONE DURATION CANNOT BE MEASURED WITH TWO CLOCKS.
+//
+// `initiatedAt` is `defaultNow()`: the DATABASE stamps it. `resolvedAt` was
+// `new Date()`: the APPLICATION stamped it, from a different machine. The two
+// disagree by roughly 60 ms, and until cycle 4 nothing subtracted them, so
+// nobody noticed.
+//
+// Cycle 4's headline column is exactly that subtraction. On circle-fiat, whose
+// median settlement is 54.9 s, 60 ms is invisible. On demo-internal, whose
+// whole settlement is 78 ms, THE SKEW IS LARGER THAN THE MEASUREMENT — the
+// median duration computed from live rows on 2026-09-24 came out NEGATIVE.
+//
+// `sql`now()`` moves the stamp to the same clock that set `initiatedAt`. No
+// status, amount or transition changes; one field changes its source. Rows
+// written before this fix keep their skew and are excluded from sub-minute
+// figures by the reader, which says how many it excluded.
 async function markSettled(db: Db, pendingId: string): Promise<void> {
   await db
     .update(pendingSettlements)
-    .set({ status: "settled", resolvedAt: new Date() })
+    .set({ status: "settled", resolvedAt: sql`now()` })
     .where(eq(pendingSettlements.id, pendingId));
 }
 
 async function markFailed(db: Db, pendingId: string, reason: string): Promise<void> {
   await db
     .update(pendingSettlements)
-    .set({ status: "failed", failureReason: reason, resolvedAt: new Date() })
+    .set({ status: "failed", failureReason: reason, resolvedAt: sql`now()` })
     .where(eq(pendingSettlements.id, pendingId));
 }
 
