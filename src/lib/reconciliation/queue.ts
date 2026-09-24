@@ -99,12 +99,38 @@ async function bookedByReference(): Promise<
  * and "nothing arrived" are different statements, and only one of them is
  * true.
  */
+/**
+ * HOW LONG A SCREEN WILL WAIT FOR A RAIL — a deploy blocker, cleared at D2.
+ *
+ * `listInbound()` is a network call with no timeout anywhere beneath it, and
+ * the ops deal book now depends on it. A DEAD rail fails in milliseconds; a
+ * SLOW one would hang the busiest screen in the product until the serverless
+ * function itself timed out, and the person would see nothing at all rather
+ * than a deal book with one unhappy card.
+ *
+ * Measured from this machine, 2026-09-24: Circle answers in 0.47–0.65 s. Four
+ * seconds is roughly six times the worst measurement — generous enough never
+ * to fire on a healthy call, short enough that a page still renders.
+ *
+ * A timeout is reported as `unreachable`, never as `unsupported` and never as
+ * an empty list: we could not ask, and money may be sitting there.
+ */
+const RAIL_TIMEOUT_MS = 4_000;
+
 export async function loadQueue(railId: RailId): Promise<QueueResult> {
   const rail = railFor(railId);
 
   let listing;
   try {
-    listing = await rail.listInbound();
+    listing = await Promise.race([
+      rail.listInbound(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`no answer within ${RAIL_TIMEOUT_MS / 1000}s`)),
+          RAIL_TIMEOUT_MS,
+        ),
+      ),
+    ]);
   } catch (err) {
     // A rail that cannot be reached is not a rail with nothing in it. The
     // screen must say which, because money may be sitting there unseen.
