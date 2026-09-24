@@ -1,5 +1,9 @@
 # Release — Fiat rail (Circle sandbox, cycle 2)
 
+> **Current decision: NO-GO, until cycle 3 slice 2 is built** — taken at the
+> R0 re-run of 2026-09-24, at the end of this file. The 2026-09-21 R0 below is
+> kept as the record of what was true then, not edited to match.
+
 ## R0 — the go/no-go (2026-09-21)
 
 **Decision, Chetan's: NO-GO, UNTIL CYCLE 3 IS FINISHED.**
@@ -222,3 +226,145 @@ sandbox           unaffected. The preview remains the demonstration.
 **What it does not change:** the go/no-go reasoning, the evidence, the three D7
 proofs, or the teardown obligations. Re-run `/release` after cycle 3 as planned;
 R0 will simply have one more fact to weigh.
+
+---
+
+# R0, re-run (2026-09-24)
+
+**Decision, Chetan's: NO-GO, UNTIL CYCLE 3 SLICE 2 IS BUILT.**
+
+The 2026-09-21 R0 said *"revisited when cycle 3 has been built."* Cycle 3
+slice 1 is built, deployed and recorded. **Slice 2 is not**, and this decision
+reads "cycle 3" as the whole cycle rather than the half of it that happens to
+close this rail's blockers. The branch stays unmerged, the preview stays the
+demonstration, production stays dark.
+
+## X, stated precisely
+
+**Release is revisited when Epic F — remember the sender — is built,
+evaluated and deployed**, the same four stations slice 1 went through.
+
+`reconciliation-ops/design.md` carries Epic F as F1–F4 with its own migration
+(widening `unique(partyId, rail)` on a live table) and a named demo gap: all
+sandbox deposits share one `source.id`, so **slice 2's central behaviour
+cannot be honestly demonstrated in sandbox** until that is solved
+deliberately. F4 says so in the design, before the code exists.
+
+## The condition the LAST R0 set, measured
+
+Its X named four findings. Two are closed, two were never reached.
+
+```text
+1  "there is no control to match a payment by hand"           CLOSED
+2  "one deposit is unreconciled… nothing in the product
+    can match it"                                             CLOSED
+3  "an open page never learns that money moved"               NOT ADDRESSED
+4  "the value-date question… whether a bank-supplied value
+    date can be captured and trusted"                         NOT REVISITED
+```
+
+**Points 3 and 4 return zero hits across every cycle-3 file** — discovery,
+design, develop, evals, deploy. They were not deferred with a reason; they
+were not reached. That is recorded here rather than quietly dropped, and
+**they are not part of this X** — the decision turns on slice 2. They have
+been given a home rather than left to be found open a third time:
+`CYCLES.md`, *"Two cycle-2 findings that cycle 3 never reached"* — the open-page
+problem to the UI and IA revisit after cycle 4, the value-date question to
+cycle 6's programme, where a value date is a term of the settlement
+arrangement rather than a rail detail.
+
+Point 2 is closed with a receipt, from `reconciliation-ops/evals.md` case 1:
+
+```text
+deal a44e9a39 at 'disbursed', repayment leg open for 100.00
+deposit 99bea655 — unattributed since it arrived, never booked
+deal advanced: disbursed → repaid
+unattributed count 11 → 10
+```
+
+> *"`99bea655` is the deposit `release.md` named as the product's one known
+> orphan. This is the first time anything in the product could resolve it."*
+
+## The evidence laid out at this R0
+
+**Deploy evidence, unchanged since 2026-09-18.** From `deploy.md`, D0:
+
+```text
+commit              5026d25
+npx tsc --noEmit    0 errors
+npm run lint        0 problems
+npm test            179 tests, 16 files, all passing
+npm run build       compiled; 9 routes
+evals               4 pass · 1 partial · 0 fail
+```
+
+The three D7 proofs stand, plus a fourth the kit does not require: a real deal
+settled end to end on the public internet, with the **payout leg booked by a
+verified delivery, unattended**.
+
+**One Deploy item is still open**, and it is quoted rather than glossed —
+`deploy.md`, *Outstanding*:
+
+> *"Scope read-back from Chetan as a written confirmation… the dashboard state
+> itself has not been read back."*
+
+Cycle 3's Deploy did take that read-back. Cycle 2's never did.
+
+**Production access, restated.** `circle-client.ts:17` defaults to
+`https://api-sandbox.circle.com`, so R3 would not be impossible — it would put
+the **sandbox** rail in front of production users unless `CIRCLE_API_BASE` is
+set, and setting it needs the commercial agreement Circle Customer Care
+described. The distinction matters: what is gated is a *real-money* fiat rail,
+not the deployment.
+
+**An untouchable module is on this branch.** `src/lib/money/index.ts` was
+modified by FIX 4 — the decimal comma that silently multiplied amounts by ten.
+Approved at the time and recorded in its commit; it lands on `main` with
+everything else whenever this merges.
+
+## The structural fact, sharper than at the last R0
+
+```text
+main                        1 commit · 22 files · no src/, no package.json
+main → feat/circle-fiat     132 files
+feat/circle-fiat HEAD       94a6398 "Cycle 3 discovered and designed"
+feat/circle-fiat is an ANCESTOR of feat/reconciliation-ops
+```
+
+Merging this branch still releases three features at once. **And the two
+branches are now stacked**: releasing cycle 2 would put cycles 0–2 on `main`
+and leave cycle 3's code unmerged on top of a merged base. That was not true
+on 2026-09-21, and it is the reason "release cycle 3 instead" was a live
+option at this R0. It was not taken.
+
+**Nothing is stale.** `main` is an ancestor of the branch and has not moved
+since 2026-09-06, so R1's merge-main-into-branch would be a no-op. The
+manifest reconciles against its own base (`feat/settlement-usdc..feat/circle-fiat`,
+59 files); it cannot be reconciled against `main`, which holds no application
+code to diff.
+
+## Standing state while parked (unchanged, re-verified 2026-09-24)
+
+```text
+branch        feat/circle-fiat, unmerged, 19 commits, pushed
+preview       https://trade-finance-rails-git-feat-circle-fiat-cheytan86s-projects.vercel.app
+production    trade-finance-rails.vercel.app stays dark — 404 · 107 bytes,
+              re-proved at cycle 3's Deploy on 2026-09-24
+flag          NEXT_PUBLIC_ENABLE_CIRCLE_RAIL in the Preview scope only
+Circle        webhook subscription 56709d33-e17c-45bc-aa1d-5ce1b976fd08 STILL
+              LIVE, still delivering to THIS preview
+wire acct     b5ac0172 (CIR3YJPTAG) permanent — Circle exposes no delete
+```
+
+**The live subscription is now a cross-cycle fact, not just this one's.**
+Cycle 3's Deploy recorded it as finding 3: the cycle-2 preview keeps booking
+into the shared database, so a payment can vanish from cycle 3's queue with
+nothing on cycle 3's preview having done it. This park keeps that true. It is
+the price of holding cycle 2's preview as the demonstration, and it is paid
+knowingly.
+
+## Reopening
+
+Invoke `/release` again when Epic F is built, evaluated and deployed. R0
+re-runs against then-current evidence. This decision records what was true on
+2026-09-24; it is not a standing verdict.

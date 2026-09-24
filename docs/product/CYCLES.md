@@ -109,6 +109,21 @@ cycle-0 vocabulary rather than inventing their own — drift is the thing to
 avoid while the redesign is pending, and `design-kit/DESIGN_SYSTEM_NOTES.md`
 holds the vocabulary.
 
+## Two cycle-2 findings that cycle 3 never reached (2026-09-24)
+
+**Found at cycle 2's R0 re-run**, which measured its own X and discovered that
+two of the four findings it named had not been addressed anywhere in cycle 3 —
+not built, not deferred with a reason, simply not reached. They are given a
+home here so the next R0 does not find them open for a third time.
+
+| finding | where it came from | routed to |
+|---|---|---|
+| **An open page never learns that money moved.** `revalidatePath` invalidates the server's cache; it does not push to a tab someone already has open. Immediate rails could not produce this. A deferred rail can: someone watches a screen while the thing they are waiting for happens elsewhere. | `circle-fiat/deploy.md` finding 3; cycle 2 R0 point 3 | **The UI and IA revisit** (standing deferral above, after cycle 4). It is a surface-behaviour problem, and cycle 3's Deploy found a second instance of the same family — a click on a money screen that showed two seconds of nothing. Both belong to the same pass. |
+| **The value-date question.** The repayment date is the date the platform receives the money — decided at cycle 2's R0 and correct for what the ledger records. The consequence stands: a debtor who pays on time through a slow bank is recorded as late, and the supplier's residual bears the overdue interest. Whether a bank-supplied value date can be captured and trusted is unanswered. | `circle-fiat/design.md` open decisions; cycle 2 R0 point 4 | **Cycle 6 — the programme.** A value date is a term of the settlement arrangement, not a rail detail, and cycle 6 is where pricing and settlement stop being per-deal choices. Circle's deposit record carries nine fields; whether any is a usable value date is a question for that cycle's discovery. |
+
+Neither is part of cycle 2's current X, which turns on cycle 3 slice 2. They
+are carried, not blocking.
+
 ## Cycle 3's scope, fixed at its Discovery (2026-09-21)
 
 **Two changes to what row 3 promised, both Chetan's, both recorded rather than
