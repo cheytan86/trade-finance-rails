@@ -39,3 +39,4 @@ coverage/
 Thumbs.db
 .idea/
 *.swp
+.replay-key.pem

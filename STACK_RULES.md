@@ -42,33 +42,33 @@ editable and starts being something a later feature must justify touching.
 ## The gate commands
 
 ```text
-[AUDITED 2026-09-04] There is no gate yet. There is no package.json, no test
-runner, no build, and no source file of any kind.
+[AUDITED 2026-09-06, prompt A0 of cycle 0] The gate exists. Four commands,
+all green at establishment:
 
-  find . -path ./.git -prune -o -type f \( -name "*.ts" -o -name "*.tsx" \
-      -o -name "*.js" -o -name "*.sol" \) -print | wc -l   → 0
-  ls package.json foundry.toml                              → no such file
-  git log --oneline                                         → no commits
+  npx tsc --noEmit     0 errors (needs Next's generated route types — run
+                       a build or `next typegen` first on a fresh clone)
+  npm run lint         eslint, 0 problems (eslint-config-next 16.3.4)
+  npm test             vitest run — 1 file, 1 test, passing (placeholder;
+                       retired when the first ledger test lands, prompt A2)
+  npm run build        next build succeeds; / prerenders static and serves
+                       (verified with `next start` + curl)
 
-Baseline at adoption: NO TEST SUITE. NO BUILD. 0 source files, 13 tracked
-files, all process documentation.
+One runner, deliberately — NOT the sibling's two-runner split. Its node --test
+half existed for evidence scripts this repo doesn't have; vitest.config.mts
+here records the reason. Add a second runner only when something needs it.
 
-**No session may claim tests passed until this section is rewritten with real
-numbers.** Cycle 0 establishes the gate and replaces this block with the
-measured baseline.
-
-[DECIDED] The gate, once cycle 0 lands, is expected to be:
-  npx tsc --noEmit · npm run lint · npm test · npm run build
-recorded here with the real counts, in the sibling repos' idiom
-(`receivables-financing-mvp/vitest.config.mts` documents the two-runner split
-and why it exists).
+**A session may claim tests passed only by showing these four commands'
+output.** Baseline history (2026-09-04, for the record): 0 source files, no
+package.json, no tests, no build.
 ```
 
 ## Framework rules
 
 ```text
-[DECIDED 2026-09-04] Next.js (App Router) + Tailwind. Versions pinned at
-scaffold in cycle 0; this line is rewritten with the exact versions then.
+[AUDITED 2026-09-06, prompt A0] Next.js 16.3.4 (App Router) + Tailwind 4.3.3,
+React 19.2.8, TypeScript 5.9.3 strict, ESLint 9.39.5, Vitest 5.0.0 — all
+pinned exact in package.json (no ranges). @types/node 24.13.3 matches the
+local Node v24.18.0 (vitest 5 refuses the scaffold's @types/node 20).
 
 [DECIDED] Scale posture — say this plainly and do not let a later session
 overstate it: THIS IS A DEMONSTRATION-SCALE SYSTEM. It is not built for volume
@@ -90,12 +90,18 @@ These are rules, not aspirations, and Design must reject a plan that breaks one:
 The extraction point — where a queue and worker would go — is named in the
 case study rather than built.
 
-[INHERITED — re-verify at scaffold] Next.js 16 is newer than most model
-training data. `receivables-financing-mvp/AGENTS.md` opens with this warning and
-the local docs live at `node_modules/next/dist/docs/`. Known divergences already
-paid for in that repo: `middleware.ts` is `proxy.ts`; route `params` is a
-Promise; `turbopack` and `outputFileTracingIncludes` are top-level, not under
-`experimental`. Re-confirm against the version actually installed here.
+[AUDITED 2026-09-06, prompt A0 — re-verified against the installed 16.3.4's
+own docs at `node_modules/next/dist/docs/`, not training data]:
+  - `middleware.ts` is deprecated and renamed `proxy.ts`
+    (01-app/03-api-reference/03-file-conventions/middleware.md says so
+    explicitly; a codemod exists).
+  - Route `params` and `searchParams` are Promises, in pages and route
+    handlers alike (page.md, route.md).
+  - Layouts/pages can use the generated helper types (`LayoutProps<"/">`
+    in the scaffold's own layout) — produced by build/typegen into
+    `.next/types`, which is why typecheck needs a build first on fresh clones.
+Consult these local docs before writing any framework code; training-data
+conventions for older Next versions do not transfer.
 ```
 
 ## Data rules
@@ -188,6 +194,30 @@ sandbox credential and cannot move real money.
 
   Read-only GETs only; nothing was written. `/v1/ping` returns 404 — it is not
   a route on this API, so do not use it as a health check.
+
+[AUDITED 2026-09-15, cycle 2 build step A0] The two gaps below are CLOSED, and
+the capability question cycle 2's design refused to guess is ANSWERED: YES.
+
+  POST /v1/businessAccount/banks/wires  → 200. Sandbox test values
+                                          12340010 / 121000248; Circle resolves
+                                          the bank itself (WELLS FARGO ****0010)
+                                          and the account reaches `complete`
+                                          within seconds.
+  POST /v1/mocks/payments/wire          → 201. INBOUND WIRE SIMULATION EXISTS,
+                                          so funding and repayment can run on
+                                          the fiat rail and cycle 2 delivers a
+                                          COMPLETE all-fiat mode.
+  Batched: up to 15 minutes from mock wire to a visible balance. That delay is
+  the first genuinely asynchronous settlement this product has had.
+
+  THE TRAP, written down because it returns a 400 with no message and no field
+  named: `beneficiaryBank.accountNumber` on the mock wire is CIRCLE'S receiving
+  account, read from GET .../banks/wires/<id>/instructions — NOT the account
+  you just registered. Passing the registered account fails at every amount.
+
+  Still unanswered, and correctly deferred to A5: whether a mock deposit fires
+  a webhook, and what signature scheme Circle uses. Both need an endpoint to
+  exist first.
 
 Two consequences for cycle 2, recorded now so they are not discovered late:
   - The sandbox returns 200 on every product surface. That is the sandbox being
