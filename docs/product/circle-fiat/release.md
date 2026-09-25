@@ -547,3 +547,75 @@ R3        not reached
 release record that said "merged, flags off, production untouched" — which
 would have been true of the merge, false of the deployment, and would have left
 two wrong assumptions in place for cycle 5 to trip over.
+
+---
+
+# Teardown — decided, not deferred (2026-09-24)
+
+**This is the fourth time cycle 2's teardown has come up. The first three left it
+"scheduled with its trigger named" and it drifted. This one splits it: two
+items are removed, one is KEPT with a written reason.**
+
+## KEPT — the Circle webhook subscription
+
+```text
+56709d33-e17c-45bc-aa1d-5ce1b976fd08
+  → …git-feat-circle-fiat-…/api/webhooks/circle
+  → confirmed, confirmed   (verified live 2026-09-24)
+```
+
+**Chetan's decision: it stays.** Deleting it stops the cycle-2 preview settling
+automatically, and that preview is **the only demonstration this product has of
+asynchronous fiat settlement** — a leg instructed now and confirmed later by a
+verified delivery, with nobody on the page. Removing the subscription would not
+tidy the estate so much as silence the one thing cycle 2 exists to show.
+
+**The cost, stated rather than glossed** — cycle 3's Deploy finding 3, still
+true: the cycle-2 preview keeps booking into a database four previews share, so
+a payment can disappear from another preview's queue with nothing on that
+preview having done it. **That is now a price paid knowingly rather than a
+loose end.**
+
+**Its trigger, with an owner:** the subscription is deleted when the cycle-2
+preview stops being the fiat demonstration — which is either when cycle 2
+reaches production and works, or when `/release` is next run on any branch that
+supersedes it. **Owner: whoever runs the next `/release`.** If that session
+finds this note, the question is theirs and it is not deferred again.
+
+## REMOVED — two feature flags
+
+```text
+NEXT_PUBLIC_ENABLE_CIRCLE_RAIL        cycle 2, Preview scope
+NEXT_PUBLIC_ENABLE_RECONCILIATION     cycle 3, Preview scope
+```
+
+Both belong to cycles that have not released. A flag outliving its stability
+window without a written reason is rot — and these never had a window, because
+neither cycle reached R3.
+
+**NOT removed:** `NEXT_PUBLIC_ENABLE_RAIL_COMPARISON`. Cycle 4's preview is the
+only place the product's headline claim — the settlement rail as an informed
+decision — currently exists at all.
+
+## Permanent, and outside anyone's control
+
+```text
+wire accounts  fbf1313c (CIR2NV7EX2) · b5ac0172 (CIR3YJPTAG)
+               Circle exposes no delete endpoint. They outlive every
+               teardown this project will ever run.
+```
+
+---
+
+# Sequencing question, asked and closed (2026-09-24)
+
+**Asked:** should contract work come earlier? The first `.sol` file currently
+arrives at cycle 8's attestation, and the substantial work — cycle 10's escrow —
+sits in the droppable tail. Cycle 10 is the only place a contract does something
+a database genuinely cannot: refuse to release funds unless a condition holds.
+
+**Chetan's decision: leave the order as it is.** Cycle 4a next, then 5, 6, 7, 8.
+If the evenings run out, this project finishes at cycle 8 having written almost
+no Solidity, **and that is an accepted outcome rather than an oversight.**
+
+Recorded so it is not re-asked at every cycle boundary.
