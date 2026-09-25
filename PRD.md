@@ -1,6 +1,6 @@
 # Trade Finance Rails — PRD
 
-**v0.6 · September 2026 · progressive by design**
+**v0.3 · September 2026 · progressive by design**
 
 > **Relationship to the programme paper.** `PRODUCT_PAPER.md` is the parent: the
 > argument, market, mechanics, risk framework and economics live there and are
@@ -36,70 +36,26 @@ adapter, mock).
 
 ## 2. The deal and its legs
 
-States, as built in cycle 1 — nine, with one two-way edge:
-
-```text
-submitted → approved → priced → funded → disbursed → repaid → settled
-    ↕ returned (ops returns with a note; the supplier corrects and resubmits)
-    → refused (terminal, the failing rule named)
-```
-
-The ops pipeline is three stages: **trade validation** (the invoice shown as
-a document; approve · return for corrections · reject) → **pricing** (the rate
-card and its full result; funding requires a priced deal) → **settlement**
-(the five money gates). Cycle 7's limit check slots in beside pricing.
-Overdue-ness is a display condition off the due date, not a state.
-Reconciliation holds and reversals arrive with cycle 3.
-
-**[cycle 2] Settlement is asynchronous, and the state machine did not change
-to absorb it.** On the fiat rail a gate INITIATES a movement and Circle
-confirms it later. Between those two moments the money has left, nothing is
-booked, and the deal has not advanced — being in flight is a display
-condition, exactly as overdue-ness is, and `src/lib/domain/states.ts` stayed
-byte-identical through the cycle to prove it. Balances are unchanged while a
-leg is in flight: **in-flight money is not money.** A leg is finished by a
-signed webhook from Circle or by an operator pressing Check status; both run
-the same booking path, which re-reads the rail's own record and never believes
-what it was told. Two limits this leaves open, both cycle 3's: an inbound
-payment is recognised by amount and arrival rather than by an id, so two
-identical amounts in flight together are a named refusal; and the repayment
-date recorded is the moment of confirmation, not of payment.
+States: `submitted → eligible → assessed → approved → funded → disbursed →
+(matured-unpaid?) → repaid → settled`, plus `refused` (with the failing rule
+named) and reconciliation holds. Exact machine is cycle-1 design territory.
 
 Money legs (paper §5–§7): financing · disbursement · repayment · payout ·
 residual, plus the conversion legs 2a/3a in hybrid mode. Priority of payments:
 funder principal first, supplier residual absorbs shortfall. Premium and fees
-are pass-through lines, never margin. Late repayment accrues **overdue
-interest** (+2% on both sides of the spread, on principal, act/360; the
-platform keeps the difference; the bearer is a programme parameter —
-supplier-residual in cycle 1, debtor-pays defined for later).
+are pass-through lines, never margin.
 
 ## 3. The three modes
 
-**all-fiat · hybrid · all-stablecoin.** One verification interface across
-rails; the state machine cannot tell rails apart.
-
-*Corrected 2026-09-15:* these are **programme configuration, not per-deal
-configuration**. Until cycle 6 builds the programme, the rail is a per-deal
-field chosen by ops on the pricing form — scaffolding, and the reason hybrid
-cannot be expressed before then: it is two rails inside one deal, and
-`invoices.rail` is one column. See `docs/product/CYCLES.md`, "The programme".
+Per-deal configuration, not builds: **all-fiat · hybrid · all-stablecoin**. One
+verification interface across rails; the state machine cannot tell rails apart.
 
 ## 4. Funding models
 
 **On-demand** (funder acts per deal) and **committed facility** (auto-drawdown;
 undrawn carry displayed; escrow contract in the droppable tail).
 
-## 5. Credit layer + the programme *(credit added 2026-09-05; the programme 2026-09-15)*
-
-**The programme is the supplier × buyer agreement, signed as an RPA**, and it
-is where the head terms live: the grid, the tier schedule, and — new, at
-Chetan's direction 2026-09-15 — the **settlement arrangement**, naming which
-rail settles which leg. **Pricing applies it read-only**; ops overrules only
-with a recorded reason. Consequences: the rail stops being a per-deal choice
-(a supplier's RPA names the account they are paid into — nobody picks a rail
-per invoice); **hybrid becomes a programme type rather than a toggle**; and
-per-leg rails fall out with no per-deal schema. Built in cycle 6.
-
+## 5. Credit layer *(scope added 2026-09-05)*
 
 Written credit policy → deterministic scorecard (every score cites its rule) →
 rating → **three-level limits** (supplier facility · supplier×buyer sub-limit
@@ -163,53 +119,20 @@ acceptance lands in each cycle's `design.md`.
 | Cycle | Slug | Discovery | Design | Shipped |
 |---|---|---|---|---|
 | 0 foundation | `foundation` | ✅ 2026-09-06 | ✅ 2026-09-06 | ⬜ |
-| 1 settlement seam + USDC | `settlement-usdc` | ✅ 2026-09-07 | ✅ 2026-09-07 | ⬜ |
-| 2 fiat rail (Circle) | `circle-fiat` | ✅ 2026-09-15 | ✅ 2026-09-15 | ⬜ |
+| 1 settlement seam + USDC | — | ⬜ | ⬜ | ⬜ |
+| 2 fiat rail (Circle) | — | ⬜ | ⬜ | ⬜ |
 | 3 reconciliation | — | ⬜ | ⬜ | ⬜ |
 | 4 priced comparison v1 | — | ⬜ | ⬜ | ⬜ |
 | 4a accounts mode *(added 2026-09-06)* | — | ⬜ | ⬜ | ⬜ |
 | 5 funding models | — | ⬜ | ⬜ | ⬜ |
-| 6 credit assessment + the programme | — | ⬜ | ⬜ | ⬜ |
+| 6 credit assessment | — | ⬜ | ⬜ | ⬜ |
 | 7 limits & portfolio | — | ⬜ | ⬜ | ⬜ |
 | 8 invoice verification | — | ⬜ | ⬜ | ⬜ |
 | 9 insured variant | — | ⬜ | ⬜ | ⬜ |
-| 10 custody: escrow + segregation | — | ⬜ | ⬜ | ⬜ |
+| 10 facility escrow | — | ⬜ | ⬜ | ⬜ |
 | 11 multi-token + Visa | — | ⬜ | ⬜ | ⬜ |
 
 ## Change log
-
-- **v0.7** (2026-09-15) — **the programme**, at Chetan's direction, from a
-  question asked while reviewing cycle 2's screen mockups: *why does pricing
-  have an option for settlement rail?* Checking found that `src/lib/pricing/`
-  never reads `rail` — the picker affected no number — and that one
-  `invoices.rail` column cannot express hybrid, which is two rails in one
-  deal. Resolution: the supplier × buyer RPA carries the grid, the tier
-  schedule **and the settlement arrangement**, and pricing applies it
-  read-only. Cycle 6 renamed "credit assessment + the programme" and extended
-  to build it; **hybrid moves from cycle 2/3 to cycle 6** as a programme type;
-  cycle 2 is async-only. Rationale in `docs/product/CYCLES.md`, "The
-  programme". Paper → v11.
-
-- **v0.6** (2026-09-09) — cycle 1's built reality folded in: the nine-state
-  machine with `returned` and `priced`, and the three-stage ops pipeline
-  (trade validation → pricing → settlement). Three Develop-time scope
-  additions at Chetan's direction, each recorded in
-  `docs/product/settlement-usdc/design.md`: invoice document fields, the
-  pricing step with its three indicators, and trade validation's three
-  outcomes.
-
-- **v0.5** (2026-09-07) — custody made explicit at Chetan's challenge: paper
-  §10 gains Q18 (bankruptcy-remoteness — the demo deliberately isn't; the
-  staged real-world structures priced, humans included; paper → v10). Cycle
-  10 extended into the custody cycle (escrow + client-money segregation);
-  standing design rule from cycle 2: client money never shares an account or
-  wallet with platform funds (docs/product/CYCLES.md).
-
-- **v0.4** (2026-09-07) — overdue interest added at Chetan's direction during
-  cycle 1's design: supplier rate +2% charged / funder rate +2% received on
-  principal act/360, platform keeps the spread, borne by the supplier's
-  residual (bearer is a programme parameter). Supersedes the paper's v5–v8
-  "unremunerated overdue" simplification; paper → v9.
 
 - **v0.3** (2026-09-06) — per-buyer pricing made explicit (the predictability
   promise is per supplier × buyer × tenor band) and the limit hierarchy added

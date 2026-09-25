@@ -1,1 +1,0 @@
-ALTER TYPE "public"."invoice_status" ADD VALUE 'priced' BEFORE 'funded';

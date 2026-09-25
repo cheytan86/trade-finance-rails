@@ -1,7 +1,7 @@
 # Trade Finance Rails — Programme Paper
 
 **Multi-rail settlement for receivables financing**
-Chetan Malhotra · September 2026 · v11 draft
+Chetan Malhotra · September 2026 · v8 draft
 
 > **What this document is.** A programme paper: the parent document for this
 > project. It carries the argument, the market, the mechanics, the risk framework
@@ -411,23 +411,6 @@ on-demand model each deal is priced individually — off the same grid, because
 the same inputs must always price the same. A funder sees the tier, its
 attestations, and what each one rules out.
 
-**The settlement arrangement is a programme term too** *(added v11,
-2026-09-15)*. The RPA does not only fix the price — it fixes **how the money
-moves**: which rail settles which leg, and therefore into what kind of account
-the supplier is paid. This is how it works in practice; a supplier's
-receivables purchase agreement names their bank account, and nobody selects a
-payment rail per invoice. Three consequences follow, and each removes a
-mechanism rather than adding one. **Hybrid mode stops being a per-deal toggle
-and becomes a programme *type*** — "the funder settles in USDC, the supplier
-receives fiat" is a property of the agreement, not a choice at pricing time.
-**Per-leg rails need no per-deal machinery**, because the arrangement can name
-a rail per leg once. And the rail becomes genuinely *priced* rather than
-merely *chosen*: a programme's cost is the grid plus the settlement
-arrangement's own cost and speed, which is the comparison this paper's thesis
-has been arguing for throughout — one supplier, several programmes, priced
-side by side. Until that exists the rail is a per-deal field an operator sets,
-which is scaffolding and is labelled as such in the build plan.
-
 **Attested on-chain, honestly labelled.** At funding, the platform signs an
 attestation — invoice, evidence hash, tier, timestamp — recorded on-chain
 (EIP-712 / EAS on Base), its identifier stored beside the ledger's settlement
@@ -528,38 +511,6 @@ pays in — so at maturity only two claims contest the debtor's money:
 A part payment, once matched, pays down funder principal first; the supplier's
 residual absorbs the shortfall. Until matched, it sits in unapplied cash and
 the invoice does not advance.
-
-When repayment arrives late, overdue interest (§9) enters this waterfall as
-its own lines: the funder's portion rides with the payout, the platform's
-books to fee income, and the supplier's charge reduces the residual — visible
-lines in the ledger, never silent adjustments.
-
-One structural honesty note: the treasury this waterfall flows through makes
-the platform a de-facto custodian of money in transit, and the demonstration
-is deliberately **not** bankruptcy-remote — §10 Q18 prices the structures a
-real programme would layer on, and names the one the demo can actually show.
-
-**[cycle 2, 2026-09-18] How much money in transit, corrected downward — twice.**
-The claim above was written assuming the platform holds the funder's return
-between funding and payout. It does not, and the correction went in two steps.
-First the ledger was found already to separate client money from platform
-funds, so the repair was a rename and a declared classification rather than
-the split the discovery had assumed. Then the funding convention itself was
-corrected: the funder **buys the receivable at a discount**, paying in the
-principal less their own return and being repaid the principal. Their return
-is therefore never handed to the platform at all, and client money empties to
-exactly zero after each stage of the deal rather than carrying a balance owed
-to somebody else. The custodial exposure is real and still not bankruptcy-
-remote — but it is the money in transit between two parties, and never a
-party's earnings sitting in a platform account waiting to be given back.
-
-**Settlement is also no longer instantaneous, and that widens the window the
-paragraph above is about.** A fiat leg is initiated and confirmed minutes or
-days later; money has left the sender and not arrived at the recipient, and
-the platform's record of it is a pending row rather than a ledger entry. The
-demonstration books nothing until the rail's own record confirms, so balances
-never overstate — but the transit window is now a thing with a duration, and
-§10 Q18's structures are what a real programme puts around it.
 
 ### Credit insurance — the insured variant
 
@@ -804,19 +755,11 @@ Whether that is cheap or dear is a per-market question this paper does not
 claim to answer; what matters is that the number is *shown*, which incumbent
 pricing rarely is.
 
-**What maturity passing does to the numbers.** Late repayment accrues overdue
-interest on the principal, act/360, at elevated rates on both sides of the
-spread: the supplier's rate + 2% is charged, the funder's rate + 2% is
-received, and the platform keeps the difference — which equals the original
-spread applied to the overdue days, consistent with the grid model. Worked
-example: 8,000 principal at 8%/7%, ten days late → 22.22 charged, 20.00 to
-the funder, 2.22 to the platform. **Who bears the charge is a programme
-parameter:** in the current build it is deducted from the supplier's residual
-(recourse-style — the debtor always pays exactly the face value), with
-debtor-pays as the defined alternative. The charge caps at the residual: a
-supplier cannot owe more than they were due. *(This replaces the v5–v8
-disclosed simplification of an unremunerated overdue period — decided
-2026-09-07.)*
+**What maturity passing does to the numbers.** Pricing is snapshotted, so no
+default interest accrues after the due date — every late day silently degrades
+the funder's realised return, and nobody is compensated for it. Real
+programmes charge late-payment interest; this design discloses the
+simplification instead of hiding it.
 
 ### Cost structure
 
@@ -953,45 +896,6 @@ Knowing which questions gate the design is the useful part.
     capital, is the platform a custodian in law anyway — whoever holds the
     keys? The answer decides whether the escrow reduces regulatory burden or
     merely relocates it.
-18. **Is the structure bankruptcy-remote?** *(Added v10, 2026-09-07, at
-    Chetan's challenge — the question the first nine versions never asked.)*
-    As demonstrated: **no, deliberately.** The platform treasury sits in the
-    middle of every flow, so money caught mid-waterfall would be estate
-    assets in a platform insolvency — the conduit design is what keeps the
-    five legs visible, and this paper says so rather than hiding it. A real
-    programme would layer protections **by stage, not pick one** (costs
-    include the humans who run each; all figures indicative, 2026):
-    - *Stage 1 — segregation without an entity (~£45–100k/yr all-in):*
-      collections into designated trust/safeguarded accounts held for the
-      funders (the e-money safeguarding model — on insolvency the segregated
-      pool pays users ahead of all other creditors), plus a regulated
-      qualified custodian for token balances (OCC trust charters and MiCA
-      both now make custodial segregation a supervised obligation, priced
-      ~10–50bps). The daily safeguarding reconciliation is a person's job,
-      not a habit — headcount is part of the cost.
-    - *Stage 2 — the entity, when institutional funders demand opinions
-      (+€45–90k/yr):* a Luxembourg securitisation vehicle with statutorily
-      ring-fenced compartments (one vehicle, every future programme), or a
-      Delaware Series LLC where cost dominates (~$500/yr structure; the
-      true-sale and non-consolidation opinions, $50–250k, are the real
-      price and arrive with the funders who require them).
-    - *Alternatives priced and set aside:* Guernsey/Jersey protected cell
-      companies (~£12–28k/yr — capable, offshore-optics cost with EU/UK
-      SMEs); the classic orphan SPV (the Stage-2 endgame at rated scale);
-      the direct-flow servicer model where the platform never touches money
-      (conceptually strongest, but its ops headcount scales with deal
-      volume — the wrong shape for an automation platform); an own e-money
-      licence (~£600k+ in year one once MLRO, compliance staff and capital
-      are real — a scale decision, not a structure).
-    - *The demonstrable rung:* the facility escrow (see the contracts
-      cycle) generalizes into **client-money segregation the demo can
-      actually run** — funds held by contract logic rather than platform
-      keys, with the account-level proof beside it. Its legal
-      characterization is Q17's open question; its mechanics are the one
-      structure on this list a reader can watch working. From the fiat-rail
-      cycle onward the build adopts the segregation *shape* regardless:
-      client money and the platform's own funds never share an account or
-      a wallet.
 
 **Question 11 is the one this project can actually contribute to**, because the
 ledger design is an answer to *"what evidence would satisfy someone who has to
