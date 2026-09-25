@@ -430,3 +430,120 @@ arrival window, not on the account — but the design named this a latent defect
 and it has now fired, caught only by a measurement taken for another purpose.
 It belongs on the next R0's evidence, and its repair trigger is recorded in
 `CYCLES.md`.
+
+---
+
+# R2 — executed, and reverted within the hour (2026-09-24)
+
+**The release was carried out exactly as approved, and undone forty minutes
+later. Both halves are recorded, because the second half is the part worth
+having.**
+
+```text
+merge       feat/circle-fiat → main, --no-ff, all flags off
+            main: 1 commit / 22 files  →  43 commits / 146 files
+            merged tree byte-identical to the branch R1 gated green
+push        58865cb, 42 commits, after a second written approval
+production  404 → 200 at about 40 seconds
+smoke       FAILED. See below.
+revert      dda04de, pushed
+            main: back to 22 files
+production  STILL 200/500 — the revert did not reach it
+deployment  deleted from the Vercel dashboard by Chetan
+production  404 · 107 bytes on every path. Dark again.
+```
+
+## Two assumptions this project had held since cycle 0, both wrong
+
+```text
+ASSUMED   "the Ignored Build Step holds production dark"
+ACTUAL    main built and deployed 40 seconds after the push
+
+ASSUMED   "reverting main restores the 404"
+ACTUAL    main without application code cannot be built, so Vercel kept
+          serving the LAST SUCCESSFUL deployment — the broken one
+```
+
+**What had actually kept production dark for three weeks was that `main`
+contained no application code.** Neither named mechanism was doing the work
+the records credited to it. Every deploy record from cycles 0, 1, 2, 3 and 4
+states the build step as the control; all five are wrong on that point, and
+none of them could have known, because production had never been asked to
+serve anything.
+
+## What the smoke path found
+
+```text
+/                200   the landing page — no query
+/supplier        200   with an ops cookie: the gate card, no query
+/funder          200   same
+/ops             500
+/ops/ledger      500
+/pay             500
+```
+
+**The Production env scope is EMPTY** — read back twice on the day — and
+`src/db/client.ts:9` throws when `DATABASE_URL` is unset. So every page that
+queries returned 500 and every page that does not returned 200.
+
+**An empty scope is not only safe, it is also non-functional, and those are the
+same fact seen from two sides.** Every record until today celebrated the first
+half without anyone noticing the second, because nothing had ever run there.
+
+## The half that worked exactly as designed
+
+```text
+circle / fiat mentions on /ops     0
+/ops/payments link                 0
+rail comparison heading            0
+POST /api/webhooks/circle          404 — the route does not exist with the
+                                   rail off
+```
+
+**Flag-off held perfectly.** Nothing flagged became visible, on a live
+production domain, which is the strongest form that proof has ever taken here.
+
+## And one consequence worth carrying to R3
+
+**The no-cookie hole was INERT in production.** `gate.tsx:22` lets a request
+with no cookie through, and on the previews Vercel's login stops it. In
+production there is no such login — but there was also no database, so
+`/ops/ledger` returned 500 rather than 144 KB.
+
+**It cannot leak a ledger it cannot read.** That protection disappears the
+instant a `DATABASE_URL` is added to the Production scope, which is why adding
+one must be a deliberate decision with `gate.tsx` fixed first, rather than a
+fix for a broken-looking page.
+
+## Where this leaves the release
+
+**The DECISION stands. Only its execution was reversed.**
+
+```text
+R0        GO — unchanged. The condition was met and Chetan took it.
+R1        green, and still green — the branch is untouched
+R2        attempted, reverted. Not a failure of the branch: the branch
+          built, served, and hid every flagged feature correctly.
+          What failed was an environment nobody had ever exercised.
+R3        not reached
+```
+
+**What R2 must do differently next time**, in order:
+
+```text
+1. fix gate.tsx:22 — a missing cookie must be a missing seat.
+   Owner: cycle 4a. This is now a PRECONDITION of R2, not of R3,
+   because the app needs a database to serve at all.
+2. add DATABASE_URL to the Production scope BEFORE merging, not after —
+   an empty scope is a broken deployment, not a dark one
+3. decide what production should serve while flags are off, and prove it
+   on a preview first — the cycle-0 spine on demo-internal is a real
+   product and should look like one
+4. know how to make production dark again. Deleting the deployment is
+   the only mechanism that worked today, and it is a dashboard action.
+```
+
+**A rollback recorded honestly is the process working.** The alternative was a
+release record that said "merged, flags off, production untouched" — which
+would have been true of the merge, false of the deployment, and would have left
+two wrong assumptions in place for cycle 5 to trip over.
